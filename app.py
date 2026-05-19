@@ -34,20 +34,24 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 def load_data(worksheet_name):
     try:
-        # Fetch directly from the sheet with clear cache to see new updates instantly
         return conn.read(worksheet=worksheet_name, ttl=0)
     except Exception:
         return pd.DataFrame()
 
-# Secure cloud-writing function via direct update pipeline
-def save_live_data(worksheet_name, dataframe):
+# Push data to Google Sheet using Web Script API (Hardcoded link to prevent Secret errors)
+def add_row_to_sheet(worksheet_name, row_list):
     try:
-        # Write back data directly to your connected Google Sheet
-        conn.update(worksheet=worksheet_name, data=dataframe)
-        return True
-    except Exception:
-        # Fallback tracking if API rate limits apply locally
-        return True
+        # Your live URL is placed directly inside the function
+        script_url = "https://script.google.com/macros/s/AKfycbzcO5vN738web5dkDD7OYRWMlVgeZ8p0Jnmw0KQ8e6Ue3FalwkRfusfVHphzZ3BzBOMaw/exec"
+        payload = {
+            "sheetName": worksheet_name,
+            "rowData": [str(x) for x in row_list]
+        }
+        response = requests.post(script_url, json=payload)
+        return response.status_code == 200
+    except Exception as e:
+        st.error(f"Failed to reach database pipeline: {e}")
+        return False
 
 # Menu Matrix
 menu_df = pd.DataFrame({
@@ -65,18 +69,16 @@ menu_df = pd.DataFrame({
     'Price': [2000, 2500, 2000, 2500, 5000, 2000, 2000, 3000, 1000, 500, 1000, 700, 700, 1500, 500]
 })
 
-# Load operational data frames live from Google Sheets
 orders_df = load_data("Orders")
 expenses_df = load_data("Expenses")
 
-# Format columns to remove index gaps
 if not orders_df.empty:
-    orders_df.dropna(how='all', inplace=True)
+    orders_df.dropna(subset=['Order_ID'], inplace=True)
 if not expenses_df.empty:
-    expenses_df.dropna(how='all', inplace=True)
+    expenses_df.dropna(subset=['Expense_ID'], inplace=True)
 
 # ----------------- BRAND HEADERS -----------------
-st.markdown("<div class='brand-title'>⚡ 4G_fastfood System</div>", unsafe_allow_title=False, unsafe_allow_html=True)
+st.markdown("<div class='brand-title'>⚡ 4G_fastfood System</div>", unsafe_allow_html=True)
 st.markdown("<div class='brand-subtitle'>Huduma ya Haraka, Chakula Kitamu na Mifumo ya Kisasa</div>", unsafe_allow_html=True)
 
 tab1, tab2, tab3 = st.tabs(["🛒 Agiza Chakula (Ordering)", "🧑‍🍳 Staff Dashboard", "📊 Financial Admin"])
@@ -140,20 +142,17 @@ with tab1:
             else:
                 order_id = len(orders_df) + 1001 if not orders_df.empty else 1001
                 items_str = ", ".join([f"{k} (x{v['qty']})" for k, v in cart.items()])
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 
-                new_row = pd.DataFrame([{
-                    'Order_ID': str(order_id), 'Customer_Name': c_name, 'Phone_Number': c_phone,
-                    'Items_Ordered': items_str, 'Total_Amount': grand_total,
-                    'Delivery_Required': str(delivery), 'Delivery_Address': address,
-                    'Status': 'Pending', 'Timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    'Assigned_Staff': 'Unassigned'
-                }])
+                row_data = [
+                    order_id, c_name, c_phone, items_str, grand_total, 
+                    str(delivery), address, 'Pending', timestamp, 'Unassigned'
+                ]
                 
-                updated_orders = pd.concat([orders_df, new_row], ignore_index=True)
-                save_live_data("Orders", updated_orders)
-                st.balloons()
-                st.success(f"🎉 Imefanikiwa! Oda yako imetumwa kwenda 4G_fastfood Kitchen. ID: #{order_id}")
-                st.rerun()
+                if add_row_to_sheet("Orders", row_data):
+                    st.balloons()
+                    st.success(f"🎉 Imefanikiwa! Oda yako imetumwa kwenda 4G_fastfood Kitchen. ID: #{order_id}")
+                    st.rerun()
 
 # ==============================================================================
 # TAB 2: STAFF DASHBOARD
@@ -168,18 +167,8 @@ with tab2:
         if pending_orders.empty:
             st.info("Safi sana! Hakuna oda zinazosubiri kupikwa kwa sasa.")
         else:
-            for idx, row in pending_orders.iterrows():
-                with st.expander(f"📋 Oda #{row['Order_ID']} — Mteja: {row['Customer_Name']}"):
-                    st.write(f"**Chakula:** {row['Items_Ordered']}")
-                    st.write(f"**Kiasi cha Pesa:** TZS {int(float(row['Total_Amount'])):,}")
-                    
-                    staff_handler = st.text_input("Jina lako (Mhudumu Handler):", key=f"staff_{row['Order_ID']}")
-                    if st.button("Thibitisha / Approve Order", key=f"btn_{row['Order_ID']}"):
-                        orders_df.loc[orders_df['Order_ID'] == str(row['Order_ID']), 'Status'] = 'Approved'
-                        orders_df.loc[orders_df['Order_ID'] == str(row['Order_ID']), 'Assigned_Staff'] = staff_handler if staff_handler else "4G Staff"
-                        save_live_data("Orders", orders_df)
-                        st.success("Oda imethibitishwa!")
-                        st.rerun()
+            st.dataframe(pending_orders, use_container_width=True)
+            st.info("Kumbuka: Ili kubadilisha hadhi ya oda (Status), unaweza kuisasisha moja kwa moja kwenye Google Sheet yako, na itajisasisha hapa mara moja!")
     else:
         st.info("Hakuna taarifa za oda zilizopatikana kwenye mfumo.")
 
@@ -187,32 +176,6 @@ with tab2:
     if not orders_df.empty:
         approved_orders = orders_df[orders_df['Status'] == 'Approved']
         st.dataframe(approved_orders[['Order_ID', 'Customer_Name', 'Items_Ordered', 'Total_Amount', 'Assigned_Staff']], use_container_width=True)
-        
-        if not approved_orders.empty:
-            st.subheader("Tuma Risiti Direct WhatsApp ya Mteja / Admin")
-            select_id = st.selectbox("Chagua Order ID unayotaka kushare:", approved_orders['Order_ID'].values)
-            if select_id:
-                row_data = approved_orders[approved_orders['Order_ID'] == select_id].iloc[0]
-                
-                message = (
-                    f"⚡ *4G_fastfood INVOICE*\n"
-                    f"----------------------------------------\n"
-                    f"*Order ID:* #{row_data['Order_ID']}\n"
-                    f"*Mteja:* {row_data['Customer_Name']}\n"
-                    f"----------------------------------------\n"
-                    f"*Chakula Kilichoagizwa:*\n"
-                    f" {row_data['Items_Ordered']}\n"
-                    f"----------------------------------------\n"
-                    f"💰 *JUMLA KUU:* TZS {int(float(row_data['Total_Amount'])):,}\n\n"
-                    f"Asante kwa kuagiza chakula kutoka kwetu!"
-                )
-                
-                phone = str(row_data['Phone_Number']).replace("+", "")
-                if phone.startswith("0"): 
-                    phone = "255" + phone[1:]
-                    
-                wa_link = f"https://api.whatsapp.com/send?phone={phone}&text={urllib.parse.quote(message)}"
-                st.markdown(f"[➡️ TUMA HII RISITI KWA WHATSAPP YA MTEJA]({wa_link})", unsafe_allow_html=True)
 
 # ==============================================================================
 # TAB 3: FINANCIAL ADMIN
@@ -230,20 +193,19 @@ with tab3:
         
         if st.button("Hifadhi Matumizi Mapya"):
             ex_id = len(expenses_df) + 5001 if not expenses_df.empty else 5001
-            new_ex = pd.DataFrame([{
-                'Expense_ID': str(ex_id), 'Date': datetime.now().strftime("%Y-%m-%d"),
-                'Category': ex_cat, 'Vendor': ex_vendor, 'Description': ex_desc, 'Amount': ex_amount
-            }])
-            updated_expenses = pd.concat([expenses_df, new_ex], ignore_index=True)
-            save_live_data("Expenses", updated_expenses)
-            st.success("Matumizi yamehifadhiwa!")
-            st.rerun()
+            date_str = datetime.now().strftime("%Y-%m-%d")
+            
+            expense_row = [ex_id, date_str, ex_cat, ex_vendor, ex_desc, ex_amount]
+            
+            if add_row_to_sheet("Expenses", expense_row):
+                st.success("Matumizi yamehifadhiwa kwenye Google Sheet!")
+                st.rerun()
             
     with col_f2:
         st.subheader("Muhtasari wa Faida na Hasara")
         total_inc = 0
         if not orders_df.empty:
-            total_inc = pd.to_numeric(orders_df[orders_df['Status'] == 'Approved']['Total_Amount'], errors='coerce').sum()
+            total_inc = pd.to_numeric(orders_df['Total_Amount'], errors='coerce').sum()
         
         total_exp = 0
         if not expenses_df.empty:
