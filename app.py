@@ -3,8 +3,10 @@ import pandas as pd
 import urllib.parse
 from datetime import datetime
 from streamlit_gsheets import GSheetsConnection
+import gspread
+from gspread_dataframe import set_with_dataframe
 
-# Page Configuration with a clean branding footprint
+# Page Configuration
 st.set_page_config(page_title="4G_fastfood System", page_icon="🍔", layout="wide")
 
 # ----------------- BRANDED ADVANCED CSS STYLING -----------------
@@ -18,8 +20,6 @@ st.markdown("""
     .menu-card strong { font-size: 18px; color: #1B5E20; }
     .price-tag { color: #E65100; font-weight: bold; font-size: 16px; float: right; }
     .floating-wa { position: fixed; bottom: 25px; right: 25px; background-color: #25D366; color: white !important; padding: 14px 22px; border-radius: 50px; font-weight: bold; font-size: 16px; box-shadow: 0px 5px 15px rgba(0,0,0,0.3); z-index: 999999; text-decoration: none !important; }
-    
-    /* Custom Field Label Styles */
     .field-label { font-size: 16px; font-weight: bold; color: #1B5E20; margin-top: 10px; margin-bottom: -5px; display: block; }
     </style>
 """, unsafe_allow_html=True)
@@ -31,6 +31,7 @@ support_url = f"https://api.whatsapp.com/send?phone={SUPPORT_PHONE}&text={encode
 st.markdown(f'<a href="{support_url}" target="_blank" class="floating-wa">💬 Chat na 4G_fastfood</a>', unsafe_allow_html=True)
 
 # ----------------- DATABASE INITIALIZATION & LIVE SYNC -----------------
+# Reading remains public and easy
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def load_data(worksheet_name):
@@ -38,6 +39,20 @@ def load_data(worksheet_name):
         return conn.read(worksheet=worksheet_name, ttl=0)
     except Exception:
         return pd.DataFrame()
+
+# Helper function to write back to sheet securely without using broken conn.update()
+def save_to_google_sheets(worksheet_name, dataframe):
+    try:
+        # Authenticate anonymously using the public editor link configuration
+        gc = gspread.public_link()
+        sh = gc.open_by_url(st.secrets["connections"]["gsheets"]["spreadsheet"])
+        worksheet = sh.worksheet(worksheet_name)
+        worksheet.clear()
+        set_with_dataframe(worksheet, dataframe)
+        return True
+    except Exception as e:
+        st.error(f"Error saving data: {e}")
+        return False
 
 # Menu Matrix
 menu_df = pd.DataFrame({
@@ -91,7 +106,6 @@ with tab1:
     with col2:
         st.subheader("Taarifa za Mteja")
         
-        # ADDED CLEAR TITLE LABELS HERE
         st.markdown("<span class='field-label'>👤 Jina Lako Kamili (Full Name):</span>", unsafe_allow_html=True)
         c_name = st.text_input("", placeholder="Mfn: John Doe", key="customer_name_input")
         
@@ -133,14 +147,11 @@ with tab1:
                     'Assigned_Staff': 'Unassigned'
                 }])
                 
-                try:
-                    updated_orders = pd.concat([orders_df, new_row], ignore_index=True)
-                    conn.update(worksheet="Orders", data=updated_orders)
+                updated_orders = pd.concat([orders_df, new_row], ignore_index=True)
+                if save_to_google_sheets("Orders", updated_orders):
                     st.balloons()
                     st.success(f"🎉 Imefanikiwa! Oda yako imetumwa kwenda 4G_fastfood Kitchen. ID: #{order_id}")
                     st.rerun()
-                except Exception as e:
-                    st.error("Kuchapisha kumeshindwa. Tafadhali thibitisha ikiwa Google Sheet yako imewekwa kama 'Editor' kwa 'Anyone with link'.")
 
 # ==============================================================================
 # TAB 2: STAFF DASHBOARD
@@ -165,9 +176,9 @@ with tab2:
                         orders_df.loc[orders_df['Order_ID'] == str(row['Order_ID']), 'Status'] = 'Approved'
                         orders_df.loc[orders_df['Order_ID'] == str(row['Order_ID']), 'Assigned_Staff'] = staff_handler if staff_handler else "4G Staff"
                         
-                        conn.update(worksheet="Orders", data=orders_df)
-                        st.success("Oda imethibitishwa!")
-                        st.rerun()
+                        if save_to_google_sheets("Orders", orders_df):
+                            st.success("Oda imethibitishwa!")
+                            st.rerun()
     else:
         st.info("Hakuna taarifa za oda zilizopatikana kwenye mfumo.")
 
@@ -223,9 +234,9 @@ with tab3:
                 'Category': ex_cat, 'Vendor': ex_vendor, 'Description': ex_desc, 'Amount': ex_amount
             }])
             updated_expenses = pd.concat([expenses_df, new_ex], ignore_index=True)
-            conn.update(worksheet="Expenses", data=updated_expenses)
-            st.success("Matumizi yamehifadhiwa!")
-            st.rerun()
+            if save_to_google_sheets("Expenses", updated_expenses):
+                st.success("Matumizi yamehifadhiwa!")
+                st.rerun()
             
     with col_f2:
         st.subheader("Muhtasari wa Faida na Hasara")
