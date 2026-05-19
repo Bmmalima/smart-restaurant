@@ -32,22 +32,30 @@ st.markdown(f'<a href="{support_url}" target="_blank" class="floating-wa">💬 C
 # ----------------- DATABASE INITIALIZATION & LIVE SYNC -----------------
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-def load_data(worksheet_name):
-    try:
-        return conn.read(worksheet=worksheet_name, ttl=0)
-    except Exception:
-        return pd.DataFrame()
+# Explicitly defining column rules to avoid index crashes on blank spreadsheets
+ORDER_COLS = ['Order_ID', 'Customer_Name', 'Phone_Number', 'Items_Ordered', 'Total_Amount', 'Delivery_Required', 'Delivery_Address', 'Status', 'Timestamp', 'Assigned_Staff']
+EXPENSE_COLS = ['Expense_ID', 'Date', 'Category', 'Vendor', 'Description', 'Amount']
 
-# Push data to Google Sheet using Web Script API (Hardcoded link to prevent Secret errors)
+def load_data(worksheet_name, default_cols):
+    try:
+        df = conn.read(worksheet=worksheet_name, ttl=0)
+        if df is None or df.empty:
+            return pd.DataFrame(columns=default_cols)
+        # Drop rows where critical tracking identities are entirely missing
+        df.dropna(how='all', inplace=True)
+        return df
+    except Exception:
+        return pd.DataFrame(columns=default_cols)
+
+# Push data to Google Sheet using Web Script API
 def add_row_to_sheet(worksheet_name, row_list):
     try:
-        # Your live URL is placed directly inside the function
         script_url = "https://script.google.com/macros/s/AKfycbzcO5vN738web5dkDD7OYRWMlVgeZ8p0Jnmw0KQ8e6Ue3FalwkRfusfVHphzZ3BzBOMaw/exec"
         payload = {
             "sheetName": worksheet_name,
             "rowData": [str(x) for x in row_list]
         }
-        response = requests.post(script_url, json=payload)
+        response = requests.post(script_url, json=payload, timeout=10)
         return response.status_code == 200
     except Exception as e:
         st.error(f"Failed to reach database pipeline: {e}")
@@ -69,13 +77,9 @@ menu_df = pd.DataFrame({
     'Price': [2000, 2500, 2000, 2500, 5000, 2000, 2000, 3000, 1000, 500, 1000, 700, 700, 1500, 500]
 })
 
-orders_df = load_data("Orders")
-expenses_df = load_data("Expenses")
-
-if not orders_df.empty:
-    orders_df.dropna(subset=['Order_ID'], inplace=True)
-if not expenses_df.empty:
-    expenses_df.dropna(subset=['Expense_ID'], inplace=True)
+# Initialize Operational Data Frames Live
+orders_df = load_data("Orders", ORDER_COLS)
+expenses_df = load_data("Expenses", EXPENSE_COLS)
 
 # ----------------- BRAND HEADERS -----------------
 st.markdown("<div class='brand-title'>⚡ 4G_fastfood System</div>", unsafe_allow_html=True)
@@ -140,7 +144,16 @@ with tab1:
             if not c_name or not c_phone or not cart:
                 st.error("Tafadhali kamilisha kujaza jina, namba na uchague chakula!")
             else:
-                order_id = len(orders_df) + 1001 if not orders_df.empty else 1001
+                # Calculate simple incremental IDs safely
+                try:
+                    if not orders_df.empty and 'Order_ID' in orders_df.columns:
+                        valid_ids = pd.to_numeric(orders_df['Order_ID'], errors='coerce').dropna()
+                        order_id = int(valid_ids.max() + 1) if not valid_ids.empty else 1001
+                    else:
+                        order_id = 1001
+                except Exception:
+                    order_id = 1001
+                    
                 items_str = ", ".join([f"{k} (x{v['qty']})" for k, v in cart.items()])
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 
@@ -149,10 +162,15 @@ with tab1:
                     str(delivery), address, 'Pending', timestamp, 'Unassigned'
                 ]
                 
-                if add_row_to_sheet("Orders", row_data):
-                    st.balloons()
-                    st.success(f"🎉 Imefanikiwa! Oda yako imetumwa kwenda 4G_fastfood Kitchen. ID: #{order_id}")
-                    st.rerun()
+                with st.spinner("Inatuma oda yako jikoni..."):
+                    if add_row_to_sheet("Orders", row_data):
+                        st.balloons()
+                        st.success(f"🎉 Imefanikiwa! Oda yako imetumwa kwenda 4G_fastfood Kitchen. ID: #{order_id}")
+                        # Soft loading reset to refresh page data cleanly
+                        st.info("Inapakia upya taarifa...")
+                        st.rerun()
+                    else:
+                        st.error("Oda haikuweza kutumwa. Tafadhali angalia kama umeweka Google App Script vizuri.")
 
 # ==============================================================================
 # TAB 2: STAFF DASHBOARD
@@ -160,22 +178,29 @@ with tab1:
 with tab2:
     st.markdown("<div class='section-header'>Oda Zinazosubiri Jikoni (Pending Verification)</div>", unsafe_allow_html=True)
     
-    if not orders_df.empty:
+    if not orders_df.empty and 'Status' in orders_df.columns:
         orders_df['Order_ID'] = orders_df['Order_ID'].astype(str)
+        # Handle string cleanup case variables
+        orders_df['Status'] = orders_df['Status'].astype(str).str.strip()
         pending_orders = orders_df[orders_df['Status'] == 'Pending']
         
         if pending_orders.empty:
             st.info("Safi sana! Hakuna oda zinazosubiri kupikwa kwa sasa.")
         else:
             st.dataframe(pending_orders, use_container_width=True)
-            st.info("Kumbuka: Ili kubadilisha hadhi ya oda (Status), unaweza kuisasisha moja kwa moja kwenye Google Sheet yako, na itajisasisha hapa mara moja!")
+            st.info("💡 Badilisha hadhi ya oda yako (Mfn: kutoka 'Pending' kwenda 'Approved') moja kwa moja kwenye Google Sheet yako, na itajisasisha hapa kiotomatiki pindi ukurasa ukipakia!")
     else:
-        st.info("Hakuna taarifa za oda zilizopatikana kwenye mfumo.")
+        st.info("Safi sana! Hakuna oda zinazosubiri kupikwa kwa sasa.")
 
     st.markdown("<div class='section-header'>Oda Zilizothibitishwa (Approved Log View)</div>", unsafe_allow_html=True)
-    if not orders_df.empty:
-        approved_orders = orders_df[orders_df['Status'] == 'Approved']
-        st.dataframe(approved_orders[['Order_ID', 'Customer_Name', 'Items_Ordered', 'Total_Amount', 'Assigned_Staff']], use_container_width=True)
+    if not orders_df.empty and 'Status' in orders_df.columns:
+        approved_orders = orders_df[orders_df['Status'].astype(str).str.strip() == 'Approved']
+        if not approved_orders.empty:
+            st.dataframe(approved_orders[['Order_ID', 'Customer_Name', 'Items_Ordered', 'Total_Amount', 'Assigned_Staff']], use_container_width=True)
+        else:
+            st.write("Hakuna oda zilizothibitishwa bado.")
+    else:
+        st.write("Hakuna oda zilizothibitishwa bado.")
 
 # ==============================================================================
 # TAB 3: FINANCIAL ADMIN
@@ -192,28 +217,37 @@ with tab3:
         ex_amount = st.number_input("Kiasi kilicholipwa (TZS):", min_value=0)
         
         if st.button("Hifadhi Matumizi Mapya"):
-            ex_id = len(expenses_df) + 5001 if not expenses_df.empty else 5001
+            try:
+                if not expenses_df.empty and 'Expense_ID' in expenses_df.columns:
+                    valid_ex_ids = pd.to_numeric(expenses_df['Expense_ID'], errors='coerce').dropna()
+                    ex_id = int(valid_ex_ids.max() + 1) if not valid_ex_ids.empty else 5001
+                else:
+                    ex_id = 5001
+            except Exception:
+                ex_id = 5001
+                
             date_str = datetime.now().strftime("%Y-%m-%d")
-            
             expense_row = [ex_id, date_str, ex_cat, ex_vendor, ex_desc, ex_amount]
             
-            if add_row_to_sheet("Expenses", expense_row):
-                st.success("Matumizi yamehifadhiwa kwenye Google Sheet!")
-                st.rerun()
+            with st.spinner("Inahifadhi matumizi..."):
+                if add_row_to_sheet("Expenses", expense_row):
+                    st.success("Matumizi yamehifadhiwa kwenye Google Sheet!")
+                    st.rerun()
             
     with col_f2:
         st.subheader("Muhtasari wa Faida na Hasara")
         total_inc = 0
-        if not orders_df.empty:
-            total_inc = pd.to_numeric(orders_df['Total_Amount'], errors='coerce').sum()
+        if not orders_df.empty and 'Status' in orders_df.columns and 'Total_Amount' in orders_df.columns:
+            approved_only = orders_df[orders_df['Status'].astype(str).str.strip() == 'Approved']
+            total_inc = pd.to_numeric(approved_only['Total_Amount'], errors='coerce').sum()
         
         total_exp = 0
-        if not expenses_df.empty:
+        if not expenses_df.empty and 'Amount' in expenses_df.columns:
             total_exp = pd.to_numeric(expenses_df['Amount'], errors='coerce').sum()
             
         net_prof = total_inc - total_exp
         
-        st.metric(label="Jumla ya Mapato (Income)", value=f"TZS {int(total_inc):,}")
+        st.metric(label="Jumla ya Mapato kutoka Approved Orders", value=f"TZS {int(total_inc):,}")
         st.metric(label="Jumla ya Matumizi (Expenses)", value=f"TZS {int(total_exp):,}")
         
         if net_prof >= 0:
