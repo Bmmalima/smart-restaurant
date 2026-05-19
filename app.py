@@ -78,7 +78,7 @@ st.markdown("""
 
 # ----------------- FLOATING WHATSAPP CUSTOMER SERVICE -----------------
 # Replace this with your default business customer support mobile line
-SUPPORT_PHONE = "255712345678" 
+SUPPORT_PHONE = "255615288736" 
 encoded_support_msg = urllib.parse.quote("Hello 4G_fastfood, nahitaji msaada/huduma tafadhali.")
 support_url = f"https://api.whatsapp.com/send?phone={SUPPORT_PHONE}&text={encoded_support_msg}"
 
@@ -99,7 +99,7 @@ def load_data(worksheet_name):
 menu_df = pd.DataFrame({
     'Item_ID': range(1, 16),
     'Name': [
-        'Ugali-msamaki', 'wali-nyama', 'wali-samaki', 'pilau-nyama',
+        'Ugali-samaki', 'wali-nyama', 'wali-samaki', 'pilau-nyama',
         'pilau-samaki', 'wali-maharage', 'chipsi-kavu', 'chipsi-mayai',
         'mshikaki-kuku', 'mshikaki-ng\'ombe', 'juice', 'soda',
         'maji', 'ndizi-choma', 'chapati'
