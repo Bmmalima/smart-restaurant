@@ -36,16 +36,13 @@ EXPENSE_COLS = ['Expense_ID', 'Date', 'Category', 'Vendor', 'Description', 'Amou
 
 def load_data(worksheet_name, default_cols):
     try:
-        # Force fresh read with 0 seconds cache TTL
         df = conn.read(worksheet=worksheet_name, ttl=0)
         if df is None or df.empty:
             return pd.DataFrame(columns=default_cols)
         
-        # Clean column names to prevent silent structural matching errors
         df.columns = [str(c).strip().replace(" ", "_").upper() for c in df.columns]
         df.dropna(how='all', inplace=True)
         
-        # Re-map clean keys to internal column matrix
         normalized_df = pd.DataFrame()
         for col in default_cols:
             up_col = col.upper()
@@ -54,12 +51,10 @@ def load_data(worksheet_name, default_cols):
             else:
                 normalized_df[col] = ""
                 
-        # CRITICAL FIX: Append-only row deduplication engine
         if not normalized_df.empty:
             if worksheet_name == "Orders" and 'Order_ID' in normalized_df.columns:
                 normalized_df['Order_ID'] = normalized_df['Order_ID'].astype(str).str.strip()
                 normalized_df = normalized_df[normalized_df['Order_ID'] != ""]
-                # Keep the last appended row (the most recent status update)
                 normalized_df.drop_duplicates(subset=['Order_ID'], keep='last', inplace=True)
             elif worksheet_name == "Expenses" and 'Expense_ID' in normalized_df.columns:
                 normalized_df['Expense_ID'] = normalized_df['Expense_ID'].astype(str).str.strip()
@@ -70,7 +65,6 @@ def load_data(worksheet_name, default_cols):
     except Exception:
         return pd.DataFrame(columns=default_cols)
 
-# Push row data directly to Google Sheet API
 def add_row_to_sheet(worksheet_name, row_list):
     try:
         script_url = "https://script.google.com/macros/s/AKfycbzcO5vN738web5dkDD7OYRWMlVgeZ8p0Jnmw0KQ8e6Ue3FalwkRfusfVHphzZ3BzBOMaw/exec"
@@ -84,11 +78,10 @@ def add_row_to_sheet(worksheet_name, row_list):
         st.error(f"Failed to reach database pipeline: {e}")
         return False
 
-# Load fully clean data matrices live
+# Load application operational memory frameworks
 orders_df = load_data("Orders", ORDER_COLS)
 expenses_df = load_data("Expenses", EXPENSE_COLS)
 
-# Dynamic Menu State Tracker Setup
 if 'dynamic_menu' not in st.session_state:
     st.session_state.dynamic_menu = pd.DataFrame({
         'Item_ID': range(1, 16),
@@ -108,14 +101,14 @@ if 'dynamic_menu' not in st.session_state:
 if 'attendance_log' not in st.session_state:
     st.session_state.attendance_log = pd.DataFrame(columns=['Staff_Name', 'Action', 'Timestamp'])
 
-# Brand Headers Layout
+# Brand Titles UI
 st.markdown("<div class='brand-title'>⚡ 4G_fastfood System</div>", unsafe_allow_html=True)
 st.markdown("<div class='brand-subtitle'>Huduma ya Haraka, Chakula Kitamu na Mifumo ya Kisasa</div>", unsafe_allow_html=True)
 
 tab1, tab2, tab3, tab4 = st.tabs(["🛒 Agiza Chakula", "🧑‍🍳 Staff Dashboard", "📊 Financial Admin", "📋 Staff Attendance"])
 
 # ==============================================================================
-# TAB 1: CUSTOMER ORDER VIEW (REFRESH-PROOF HYBRID DESIGN)
+# TAB 1: CUSTOMER ORDER VIEW
 # ==============================================================================
 with tab1:
     st.markdown("<div class='section-header'>Chagua Menyu Yako Safi Chini</div>", unsafe_allow_html=True)
@@ -140,7 +133,6 @@ with tab1:
                         cart[row['Name']] = {'qty': qty, 'price': row['Price']}
     
     with col2:
-        # Live Cost calculation summary side panel
         st.write("### 🧾 Muhtasari wa Gharama")
         subtotal = sum(details['qty'] * details['price'] for details in cart.values())
         
@@ -155,7 +147,6 @@ with tab1:
         st.markdown(f"### **JUMLA KUU: TZS {grand_total:,}**")
         st.markdown("---")
         
-        # Form block protects user from screen flashes or resets while typing names/phones
         with st.form(key="customer_checkout_form"):
             st.subheader("Taarifa za Mteja")
             c_name = st.text_input("Jina Lako Kamili (Full Name):", placeholder="Mfn: John Doe")
@@ -192,7 +183,6 @@ with tab1:
                         st.balloons()
                         st.success(f"🎉 Imefanikiwa! Oda #{order_id} imetumwa jikoni kwetu.")
                         
-                        # WhatsApp Link engine builder
                         thank_you_text = (
                             f"Habari *{c_name}*,\n\n"
                             f"Asante sana kwa kuweka oda yako na *4G_fastfood*! 🙏🍔\n\n"
@@ -210,7 +200,7 @@ with tab1:
                         st.markdown(f'<a href="{thanks_wa_url}" target="_blank" style="background-color: #25D366; color: white; padding: 12px 24px; text-decoration: none; font-weight: bold; border-radius: 25px; display: block; text-align: center; margin-top: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">👉 Tuma Oda Hii Kwenda WhatsApp</a>', unsafe_allow_html=True)
 
 # ==============================================================================
-# TAB 2: STAFF DASHBOARD (STABLE STATUS DISPATCH)
+# TAB 2: STAFF DASHBOARD
 # ==============================================================================
 with tab2:
     st.markdown("<div class='section-header'>Oda Zinazosubiri Jikoni (Pending Verification)</div>", unsafe_allow_html=True)
@@ -258,7 +248,7 @@ with tab2:
             st.write("Hakuna oda zilizothibitishwa bado.")
 
 # ==============================================================================
-# TAB 3: FINANCIAL ADMIN & ACCURATE MATHEMATICS
+# TAB 3: FINANCIAL ADMIN (WITH ADVANCED PERFORMANCE CHART TREND)
 # ==============================================================================
 with tab3:
     st.markdown("<div class='section-header'>Usimamizi wa Menyu (Add New Foods & Prices)</div>", unsafe_allow_html=True)
@@ -321,7 +311,6 @@ with tab3:
         total_approved_inc = 0
         total_pending_inc = 0
         
-        # Correctly clean and parse incoming financial order metrics
         if not orders_df.empty and 'Total_Amount' in orders_df.columns:
             orders_df['Status_Clean'] = orders_df['Status'].astype(str).str.strip().str.upper()
             clean_rev = orders_df['Total_Amount'].astype(str).str.replace(',', '').str.replace('TZS', '').str.strip()
@@ -330,24 +319,76 @@ with tab3:
             total_approved_inc = orders_df[orders_df['Status_Clean'] == 'APPROVED']['Amount_Numeric'].sum()
             total_pending_inc = orders_df[orders_df['Status_Clean'] == 'PENDING']['Amount_Numeric'].sum()
             
-        # Correctly clean and parse incoming financial expense metrics
         total_exp = 0
         if not expenses_df.empty and 'Amount' in expenses_df.columns:
             clean_exp = expenses_df['Amount'].astype(str).str.replace(',', '').str.replace('TZS', '').str.strip()
-            total_exp = pd.to_numeric(clean_exp, errors='coerce').fillna(0).sum()
+            expenses_df['Amount_Numeric'] = pd.to_numeric(clean_exp, errors='coerce').fillna(0)
+            total_exp = expenses_df['Amount_Numeric'].sum()
             
-        # Core mathematical logic verification
         net_prof = total_approved_inc - total_exp
         
         st.metric(label="💰 Jumla ya Mapato Halisi (Approved Cash)", value=f"TZS {int(total_approved_inc):,}")
         st.metric(label="⏳ Thamani ya Oda Zinazosubiri (Pending Sales Value)", value=f"TZS {int(total_pending_inc):,}")
         st.metric(label="📉 Jumla ya Matumizi (Total Expenses)", value=f"TZS {int(total_exp):,}")
-        st.markdown("---")
         
         if net_prof >= 0:
             st.metric(label="📊 FAIDA KUU (Net Profit)", value=f"TZS {int(net_prof):,}", delta="Biashara Inazalisha Vizuri! ✅")
         else:
             st.metric(label="📊 HASARA (Net Loss)", value=f"TZS {int(abs(net_prof)):,}", delta="- Hasara Katika Kipindi Hiki")
+
+    # ==============================================================================
+    # NEW SECURE DATA VISUALIZATION PROFILE TREND CHART
+    # ==============================================================================
+    st.markdown("<div class='section-header'>📈 Mwenendo wa Biashara (Financial Trend Profile)</div>", unsafe_allow_html=True)
+    
+    # Timeline Builder Pipeline
+    try:
+        chart_data_list = []
+        
+        # Pull Approved Income metrics over timeline
+        if not orders_df.empty and 'Amount_Numeric' in orders_df.columns:
+            approved_only = orders_df[orders_df['Status_Clean'] == 'APPROVED'].copy()
+            if not approved_only.empty and 'Timestamp' in approved_only.columns:
+                # Safely normalize timestamp string to date format
+                approved_only['Clean_Date'] = pd.to_datetime(approved_only['Timestamp'], errors='coerce').dt.strftime('%Y-%m-%d')
+                income_grouped = approved_only.groupby('Clean_Date')['Amount_Numeric'].sum().reset_index()
+                income_grouped.columns = ['Date', 'Income']
+                chart_data_list.append(income_grouped)
+                
+        # Pull Expense metrics over timeline
+        if not expenses_df.empty and 'Amount_Numeric' in expenses_df.columns:
+            expenses_copy = expenses_df.copy()
+            if not expenses_copy.empty and 'Date' in expenses_copy.columns:
+                expenses_copy['Clean_Date'] = pd.to_datetime(expenses_copy['Date'], errors='coerce').dt.strftime('%Y-%m-%d')
+                expense_grouped = expenses_copy.groupby('Clean_Date')['Amount_Numeric'].sum().reset_index()
+                expense_grouped.columns = ['Date', 'Expenses']
+                chart_data_list.append(expense_grouped)
+                
+        if chart_data_list:
+            # Merge timelines cleanly to display chronological tracking
+            merged_chart_df = chart_data_list[0]
+            for df_to_merge in chart_data_list[1:]:
+                merged_chart_df = pd.merge(merged_chart_df, df_to_merge, on='Date', how='outer')
+                
+            merged_chart_df.fillna(0, inplace=True)
+            merged_chart_df = merged_chart_df.sort_values(by='Date')
+            
+            # Formulate cumulative tracking vectors
+            merged_chart_df['Cumulative_Income'] = merged_chart_df['Income'].cumsum()
+            merged_chart_df['Cumulative_Expenses'] = merged_chart_df['Expenses'].cumsum()
+            merged_chart_df['Net_Profit_Trend'] = merged_chart_df['Cumulative_Income'] - merged_chart_df['Cumulative_Expenses']
+            
+            # Set structural database formatting context 
+            chart_display_df = merged_chart_df[['Date', 'Cumulative_Income', 'Cumulative_Expenses', 'Net_Profit_Trend']].copy()
+            chart_display_df.set_index('Date', inplace=True)
+            
+            # Draw native charts beautifully
+            st.write("Mstari wa Kijani/Mwenendo wa Faida na Matumizi kwa Tarehe:")
+            st.area_chart(chart_display_df, use_container_width=True)
+        else:
+            st.info("Ingiza data za Oda na Matumizi ili kuona grafu ya mwenendo hapa.")
+    except Exception as chart_err:
+        st.info("Grafu itatokea hapa pindi data za miamala zitakapokamilika kikamilifu.")
 
 # ==============================================================================
 # TAB 4: STAFF ATTENDANCE TRACKER
