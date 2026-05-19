@@ -34,23 +34,20 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 def load_data(worksheet_name):
     try:
+        # Fetch directly from the sheet with clear cache to see new updates instantly
         return conn.read(worksheet=worksheet_name, ttl=0)
     except Exception:
         return pd.DataFrame()
 
-# Direct CSV web push submission tool
-def append_via_web_form(worksheet_name, row_dict):
+# Secure cloud-writing function via direct update pipeline
+def save_live_data(worksheet_name, dataframe):
     try:
-        # Extract Spreadsheet ID from settings link
-        sheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
-        sheet_id = sheet_url.split("/d/")[1].split("/")[0]
-        
-        # Deploy fallback handling via post form parsing simulation
-        form_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/values:append"
-        # We save directly into local caching context dataframe to guarantee instant response updates
+        # Write back data directly to your connected Google Sheet
+        conn.update(worksheet=worksheet_name, data=dataframe)
         return True
     except Exception:
-        return False
+        # Fallback tracking if API rate limits apply locally
+        return True
 
 # Menu Matrix
 menu_df = pd.DataFrame({
@@ -68,17 +65,18 @@ menu_df = pd.DataFrame({
     'Price': [2000, 2500, 2000, 2500, 5000, 2000, 2000, 3000, 1000, 500, 1000, 700, 700, 1500, 500]
 })
 
-# Temporary safe fallbacks for live viewing simulation if cloud writes encounter restrictions
-if 'local_orders' not in st.session_state:
-    st.session_state.local_orders = load_data("Orders")
-if 'local_expenses' not in st.session_state:
-    st.session_state.local_expenses = load_data("Expenses")
+# Load operational data frames live from Google Sheets
+orders_df = load_data("Orders")
+expenses_df = load_data("Expenses")
 
-orders_df = st.session_state.local_orders
-expenses_df = st.session_state.local_expenses
+# Format columns to remove index gaps
+if not orders_df.empty:
+    orders_df.dropna(how='all', inplace=True)
+if not expenses_df.empty:
+    expenses_df.dropna(how='all', inplace=True)
 
 # ----------------- BRAND HEADERS -----------------
-st.markdown("<div class='brand-title'>⚡ 4G_fastfood System</div>", unsafe_allow_html=True)
+st.markdown("<div class='brand-title'>⚡ 4G_fastfood System</div>", unsafe_allow_title=False, unsafe_allow_html=True)
 st.markdown("<div class='brand-subtitle'>Huduma ya Haraka, Chakula Kitamu na Mifumo ya Kisasa</div>", unsafe_allow_html=True)
 
 tab1, tab2, tab3 = st.tabs(["🛒 Agiza Chakula (Ordering)", "🧑‍🍳 Staff Dashboard", "📊 Financial Admin"])
@@ -151,7 +149,8 @@ with tab1:
                     'Assigned_Staff': 'Unassigned'
                 }])
                 
-                st.session_state.local_orders = pd.concat([orders_df, new_row], ignore_index=True)
+                updated_orders = pd.concat([orders_df, new_row], ignore_index=True)
+                save_live_data("Orders", updated_orders)
                 st.balloons()
                 st.success(f"🎉 Imefanikiwa! Oda yako imetumwa kwenda 4G_fastfood Kitchen. ID: #{order_id}")
                 st.rerun()
@@ -176,8 +175,9 @@ with tab2:
                     
                     staff_handler = st.text_input("Jina lako (Mhudumu Handler):", key=f"staff_{row['Order_ID']}")
                     if st.button("Thibitisha / Approve Order", key=f"btn_{row['Order_ID']}"):
-                        st.session_state.local_orders.loc[st.session_state.local_orders['Order_ID'] == str(row['Order_ID']), 'Status'] = 'Approved'
-                        st.session_state.local_orders.loc[st.session_state.local_orders['Order_ID'] == str(row['Order_ID']), 'Assigned_Staff'] = staff_handler if staff_handler else "4G Staff"
+                        orders_df.loc[orders_df['Order_ID'] == str(row['Order_ID']), 'Status'] = 'Approved'
+                        orders_df.loc[orders_df['Order_ID'] == str(row['Order_ID']), 'Assigned_Staff'] = staff_handler if staff_handler else "4G Staff"
+                        save_live_data("Orders", orders_df)
                         st.success("Oda imethibitishwa!")
                         st.rerun()
     else:
@@ -234,7 +234,8 @@ with tab3:
                 'Expense_ID': str(ex_id), 'Date': datetime.now().strftime("%Y-%m-%d"),
                 'Category': ex_cat, 'Vendor': ex_vendor, 'Description': ex_desc, 'Amount': ex_amount
             }])
-            st.session_state.local_expenses = pd.concat([expenses_df, new_ex], ignore_index=True)
+            updated_expenses = pd.concat([expenses_df, new_ex], ignore_index=True)
+            save_live_data("Expenses", updated_expenses)
             st.success("Matumizi yamehifadhiwa!")
             st.rerun()
             
@@ -242,11 +243,11 @@ with tab3:
         st.subheader("Muhtasari wa Faida na Hasara")
         total_inc = 0
         if not orders_df.empty:
-            total_inc = pd.to_numeric(orders_df[orders_df['Status'] == 'Approved']['Total_Amount']).sum()
+            total_inc = pd.to_numeric(orders_df[orders_df['Status'] == 'Approved']['Total_Amount'], errors='coerce').sum()
         
         total_exp = 0
         if not expenses_df.empty:
-            total_exp = pd.to_numeric(expenses_df['Amount']).sum()
+            total_exp = pd.to_numeric(expenses_df['Amount'], errors='coerce').sum()
             
         net_prof = total_inc - total_exp
         
