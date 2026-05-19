@@ -40,7 +40,12 @@ def load_data(worksheet_name, default_cols):
         if df is None or df.empty:
             return pd.DataFrame(columns=default_cols)
         
-        df.columns = [str(c).strip().replace(" ", "_").upper() for c in df.columns]
+        # Aggressive cleaning: matches variations like "Order ID", "order_id", or "ORDER ID"
+        cleaned_columns = []
+        for c in df.columns:
+            c_clean = str(c).strip().replace(" ", "_").upper()
+            cleaned_columns.append(c_clean)
+        df.columns = cleaned_columns
         df.dropna(how='all', inplace=True)
         
         normalized_df = pd.DataFrame()
@@ -78,7 +83,7 @@ def add_row_to_sheet(worksheet_name, row_list):
         st.error(f"Failed to reach database pipeline: {e}")
         return False
 
-# Load application operational memory frameworks
+# Load application clean data schemas
 orders_df = load_data("Orders", ORDER_COLS)
 expenses_df = load_data("Expenses", EXPENSE_COLS)
 
@@ -101,7 +106,6 @@ if 'dynamic_menu' not in st.session_state:
 if 'attendance_log' not in st.session_state:
     st.session_state.attendance_log = pd.DataFrame(columns=['Staff_Name', 'Action', 'Timestamp'])
 
-# Brand Titles UI
 st.markdown("<div class='brand-title'>⚡ 4G_fastfood System</div>", unsafe_allow_html=True)
 st.markdown("<div class='brand-subtitle'>Huduma ya Haraka, Chakula Kitamu na Mifumo ya Kisasa</div>", unsafe_allow_html=True)
 
@@ -181,7 +185,7 @@ with tab1:
                     
                     if add_row_to_sheet("Orders", row_data):
                         st.balloons()
-                        st.success(f"🎉 Imefanikiwa! Oda #{order_id} imetumwa jikoni kwetu.")
+                        st.success(f"🎉 Imefanikiwa! Oda #{order_id} imetumwa jikoni.")
                         
                         thank_you_text = (
                             f"Habari *{c_name}*,\n\n"
@@ -189,7 +193,7 @@ with tab1:
                             f"📝 *Muhtasari wa Oda Yako (# {order_id}):*\n"
                             f"• *Chakula:* {items_str}\n"
                             f"• *Jumla Kuu:* TZS {grand_total:,}\n\n"
-                            f"Oda yako imepokelewa jikoni kwetu na inafanyiwa kazi sasa hivi. Tutakuarifu ikishakuwa tayari!"
+                            f"Oda yako imepokelewa jikoni na inashughulikiwa hivi sasa!"
                         )
                         formatted_phone = str(c_phone).replace("+", "").strip()
                         if formatted_phone.startswith("0"):
@@ -233,7 +237,7 @@ with tab2:
                             matched_row['Delivery_Address'], 'Approved', approval_timestamp, handler
                         ]
                         if add_row_to_sheet("Orders", update_row):
-                            st.success(f"Oda #{selected_order} imethibitishwa kwa ufanisi!")
+                            st.success(f"Oda #{selected_order} imethibitishwa!")
                             st.rerun()
     else:
         st.info("Safi sana! Hakuna oda zinazosubiri kupikwa kwa sasa.")
@@ -248,7 +252,7 @@ with tab2:
             st.write("Hakuna oda zilizothibitishwa bado.")
 
 # ==============================================================================
-# TAB 3: FINANCIAL ADMIN (WITH ADVANCED PERFORMANCE CHART TREND)
+# TAB 3: FINANCIAL ADMIN & CALCULATION ENGINE
 # ==============================================================================
 with tab3:
     st.markdown("<div class='section-header'>Usimamizi wa Menyu (Add New Foods & Prices)</div>", unsafe_allow_html=True)
@@ -337,25 +341,21 @@ with tab3:
             st.metric(label="📊 HASARA (Net Loss)", value=f"TZS {int(abs(net_prof)):,}", delta="- Hasara Katika Kipindi Hiki")
 
     # ==============================================================================
-    # NEW SECURE DATA VISUALIZATION PROFILE TREND CHART
+    # FINANCIAL TREND VISUALIZATION PROFILE CHART
     # ==============================================================================
     st.markdown("<div class='section-header'>📈 Mwenendo wa Biashara (Financial Trend Profile)</div>", unsafe_allow_html=True)
     
-    # Timeline Builder Pipeline
     try:
         chart_data_list = []
         
-        # Pull Approved Income metrics over timeline
         if not orders_df.empty and 'Amount_Numeric' in orders_df.columns:
             approved_only = orders_df[orders_df['Status_Clean'] == 'APPROVED'].copy()
             if not approved_only.empty and 'Timestamp' in approved_only.columns:
-                # Safely normalize timestamp string to date format
                 approved_only['Clean_Date'] = pd.to_datetime(approved_only['Timestamp'], errors='coerce').dt.strftime('%Y-%m-%d')
                 income_grouped = approved_only.groupby('Clean_Date')['Amount_Numeric'].sum().reset_index()
                 income_grouped.columns = ['Date', 'Income']
                 chart_data_list.append(income_grouped)
                 
-        # Pull Expense metrics over timeline
         if not expenses_df.empty and 'Amount_Numeric' in expenses_df.columns:
             expenses_copy = expenses_df.copy()
             if not expenses_copy.empty and 'Date' in expenses_copy.columns:
@@ -365,7 +365,6 @@ with tab3:
                 chart_data_list.append(expense_grouped)
                 
         if chart_data_list:
-            # Merge timelines cleanly to display chronological tracking
             merged_chart_df = chart_data_list[0]
             for df_to_merge in chart_data_list[1:]:
                 merged_chart_df = pd.merge(merged_chart_df, df_to_merge, on='Date', how='outer')
@@ -373,16 +372,13 @@ with tab3:
             merged_chart_df.fillna(0, inplace=True)
             merged_chart_df = merged_chart_df.sort_values(by='Date')
             
-            # Formulate cumulative tracking vectors
             merged_chart_df['Cumulative_Income'] = merged_chart_df['Income'].cumsum()
             merged_chart_df['Cumulative_Expenses'] = merged_chart_df['Expenses'].cumsum()
             merged_chart_df['Net_Profit_Trend'] = merged_chart_df['Cumulative_Income'] - merged_chart_df['Cumulative_Expenses']
             
-            # Set structural database formatting context 
             chart_display_df = merged_chart_df[['Date', 'Cumulative_Income', 'Cumulative_Expenses', 'Net_Profit_Trend']].copy()
             chart_display_df.set_index('Date', inplace=True)
             
-            # Draw native charts beautifully
             st.write("Mstari wa Kijani/Mwenendo wa Faida na Matumizi kwa Tarehe:")
             st.area_chart(chart_display_df, use_container_width=True)
         else:
