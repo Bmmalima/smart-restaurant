@@ -37,20 +37,25 @@ EXPENSE_COLS = ['Expense_ID', 'Date', 'Category', 'Vendor', 'Description', 'Amou
 
 def load_data(worksheet_name, default_cols):
     try:
+        # Read live with caching turned off completely
         df = conn.read(worksheet=worksheet_name, ttl=0)
         if df is None or df.empty:
             return pd.DataFrame(columns=default_cols)
         
-        # Auto-clean spreadsheet headers to match code mapping perfectly
-        df.columns = [str(c).strip().replace(" ", "_") for c in df.columns]
+        # Aggressive column normalization: removes spaces, replaces with underscores, uppercase forced
+        df.columns = [str(c).strip().replace(" ", "_").upper() for c in df.columns]
         df.dropna(how='all', inplace=True)
         
-        # Ensure all columns exist visually to avoid layout crashes
+        # Map normal keys to internal uppercase tracker structure safely
+        normalized_df = pd.DataFrame()
         for col in default_cols:
-            if col not in df.columns:
-                df[col] = ""
-        return df
-    except Exception:
+            up_col = col.upper()
+            if up_col in df.columns:
+                normalized_df[col] = df[up_col]
+            else:
+                normalized_df[col] = ""
+        return normalized_df
+    except Exception as e:
         return pd.DataFrame(columns=default_cols)
 
 # Push data to Google Sheet using Web Script API
@@ -204,15 +209,17 @@ with tab2:
     st.markdown("<div class='section-header'>Oda Zinazosubiri Jikoni (Pending Verification)</div>", unsafe_allow_html=True)
     
     if not orders_df.empty and 'Status' in orders_df.columns:
+        # Convert strings safely to remove formatting mismatches
         orders_df['Order_ID'] = orders_df['Order_ID'].astype(str)
-        orders_df['Status'] = orders_df['Status'].astype(str).str.strip().str.capitalize()
+        orders_df['Status_Clean'] = orders_df['Status'].astype(str).str.strip().str.upper()
         
-        pending_orders = orders_df[orders_df['Status'] == 'Pending']
+        # Match against UPPERCASE 'PENDING'
+        pending_orders = orders_df[orders_df['Status_Clean'] == 'PENDING']
         
         if pending_orders.empty:
             st.info("Safi sana! Hakuna oda zinazosubiri kupikwa kwa sasa.")
         else:
-            st.dataframe(pending_orders, use_container_width=True)
+            st.dataframe(pending_orders[ORDER_COLS], use_container_width=True)
             
             st.subheader("⚙️ On-Screen Quick Actions")
             selected_order = st.selectbox("Chagua Order ID ya Kushughulikia:", pending_orders['Order_ID'].values)
@@ -238,14 +245,15 @@ with tab2:
 
     st.markdown("<div class='section-header'>Oda Zilizothibitishwa (Approved Log View)</div>", unsafe_allow_html=True)
     if not orders_df.empty and 'Status' in orders_df.columns:
-        approved_orders = orders_df[orders_df['Status'].astype(str).str.strip().str.capitalize() == 'Approved']
+        orders_df['Status_Clean'] = orders_df['Status'].astype(str).str.strip().str.upper()
+        approved_orders = orders_df[orders_df['Status_Clean'] == 'APPROVED']
         if not approved_orders.empty:
             st.dataframe(approved_orders[['Order_ID', 'Customer_Name', 'Items_Ordered', 'Total_Amount', 'Assigned_Staff', 'Timestamp']], use_container_width=True)
         else:
             st.write("Hakuna oda zilizothibitishwa bado.")
 
 # ==============================================================================
-# TAB 3: FINANCIAL ADMIN (CALCULATION REPAIRS)
+# TAB 3: FINANCIAL ADMIN & CALCULATION PROTECTION
 # ==============================================================================
 with tab3:
     st.markdown("<div class='section-header'>Usimamizi wa Menyu (Add New Foods & Prices)</div>", unsafe_allow_html=True)
@@ -304,24 +312,22 @@ with tab3:
     with col_f2:
         st.subheader("Muhtasari wa Faida na Hasara")
         
-        # Calculate income from Approved orders
+        # Super robust calculation handling for Total Orders Revenue
         total_inc = 0
         if not orders_df.empty and 'Total_Amount' in orders_df.columns:
-            # We filter for Approved orders to get actual revenue
-            if 'Status' in orders_df.columns:
-                approved_df = orders_df[orders_df['Status'].astype(str).str.strip().str.capitalize() == 'Approved']
-                total_inc = pd.to_numeric(approved_df['Total_Amount'], errors='coerce').fillna(0).sum()
-            else:
-                total_inc = pd.to_numeric(orders_df['Total_Amount'], errors='coerce').fillna(0).sum()
+            # Clean string symbols like commas/TZS currency letters from sheet data
+            clean_revenue = orders_df['Total_Amount'].astype(str).str.replace(',', '').str.replace('TZS', '').str.strip()
+            total_inc = pd.to_numeric(clean_revenue, errors='coerce').fillna(0).sum()
         
-        # Calculate expenses
+        # Super robust calculation handling for Total Expenses
         total_exp = 0
         if not expenses_df.empty and 'Amount' in expenses_df.columns:
-            total_exp = pd.to_numeric(expenses_df['Amount'], errors='coerce').fillna(0).sum()
+            clean_expense = expenses_df['Amount'].astype(str).str.replace(',', '').str.replace('TZS', '').str.strip()
+            total_exp = pd.to_numeric(clean_expense, errors='coerce').fillna(0).sum()
             
         net_prof = total_inc - total_exp
         
-        st.metric(label="Jumla ya Mapato (Approved Orders)", value=f"TZS {int(total_inc):,}")
+        st.metric(label="Jumla ya Mapato (All Registered Orders)", value=f"TZS {int(total_inc):,}")
         st.metric(label="Jumla ya Matumizi (Total Expenses)", value=f"TZS {int(total_exp):,}")
         
         if net_prof >= 0:
