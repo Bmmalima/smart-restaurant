@@ -7,84 +7,26 @@ from streamlit_gsheets import GSheetsConnection
 # Page Configuration with a clean branding footprint
 st.set_page_config(page_title="4G_fastfood System", page_icon="🍔", layout="wide")
 
-# ----------------- BRANDED ADVANCED CSS STYLING (Green, Amber & Charcoal) -----------------
+# ----------------- BRANDED ADVANCED CSS STYLING -----------------
 st.markdown("""
     <style>
-    /* Global Background and Typography adjustments */
     .stApp { background-color: #FAFAFA; }
-    
-    /* Main Brand Title Styling */
-    .brand-title { 
-        font-size: 42px; 
-        font-weight: 900; 
-        color: #1B5E20; /* Deep Executive Green */
-        text-align: center; 
-        margin-bottom: 5px;
-        letter-spacing: 1px;
-    }
-    .brand-subtitle {
-        font-size: 16px;
-        color: #558B2F; /* Accent Green */
-        text-align: center;
-        margin-bottom: 30px;
-        font-weight: 500;
-    }
-    
-    /* Section Headers */
-    .section-header { 
-        font-size: 24px; 
-        font-weight: bold; 
-        color: #2E7D32; 
-        border-bottom: 3px solid #A5D6A7; 
-        padding-bottom: 8px; 
-        margin-top: 25px;
-        margin-bottom: 15px;
-    }
-    
-    /* Elegant Interactive Food Display Cards */
-    .menu-card { 
-        background-color: #E8F5E9; /* Light Soft Mint Green */
-        padding: 18px; 
-        border-radius: 12px; 
-        border-left: 6px solid #2E7D32; /* Strong Green Core */
-        margin-bottom: 12px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-    }
+    .brand-title { font-size: 42px; font-weight: 900; color: #1B5E20; text-align: center; margin-bottom: 5px; letter-spacing: 1px; }
+    .brand-subtitle { font-size: 16px; color: #558B2F; text-align: center; margin-bottom: 30px; font-weight: 500; }
+    .section-header { font-size: 24px; font-weight: bold; color: #2E7D32; border-bottom: 3px solid #A5D6A7; padding-bottom: 8px; margin-top: 25px; margin-bottom: 15px; }
+    .menu-card { background-color: #E8F5E9; padding: 18px; border-radius: 12px; border-left: 6px solid #2E7D32; margin-bottom: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
     .menu-card strong { font-size: 18px; color: #1B5E20; }
     .price-tag { color: #E65100; font-weight: bold; font-size: 16px; float: right; }
-    
-    /* FLOATING WHATSAPP CUSTOMER SERVICE BUTTON (Accessible from anywhere on screen) */
-    .floating-wa {
-        position: fixed;
-        bottom: 25px;
-        right: 25px;
-        background-color: #25D366; /* Official WhatsApp Green */
-        color: white !important;
-        padding: 14px 22px;
-        border-radius: 50px;
-        font-weight: bold;
-        font-size: 16px;
-        box-shadow: 0px 5px 15px rgba(0,0,0,0.3);
-        z-index: 999999;
-        text-decoration: none !important;
-        transition: transform 0.2s ease-in-out;
-    }
-    .floating-wa:hover {
-        transform: scale(1.05);
-        background-color: #128C7E;
-    }
+    .floating-wa { position: fixed; bottom: 25px; right: 25px; background-color: #25D366; color: white !important; padding: 14px 22px; border-radius: 50px; font-weight: bold; font-size: 16px; box-shadow: 0px 5px 15px rgba(0,0,0,0.3); z-index: 999999; text-decoration: none !important; }
     </style>
 """, unsafe_allow_html=True)
 
 # ----------------- FLOATING WHATSAPP CUSTOMER SERVICE -----------------
-# Replace this with your default business customer support mobile line
+# UPDATED: Your new business phone line
 SUPPORT_PHONE = "255615288736" 
 encoded_support_msg = urllib.parse.quote("Hello 4G_fastfood, nahitaji msaada/huduma tafadhali.")
 support_url = f"https://api.whatsapp.com/send?phone={SUPPORT_PHONE}&text={encoded_support_msg}"
-
-# Render floating support item across all view screens
 st.markdown(f'<a href="{support_url}" target="_blank" class="floating-wa">💬 Chat na 4G_fastfood</a>', unsafe_allow_html=True)
-
 
 # ----------------- DATABASE INITIALIZATION & LIVE SYNC -----------------
 conn = st.connection("gsheets", type=GSheetsConnection)
@@ -95,11 +37,11 @@ def load_data(worksheet_name):
     except Exception:
         return pd.DataFrame()
 
-# Menu Matrix 
+# Menu Matrix
 menu_df = pd.DataFrame({
     'Item_ID': range(1, 16),
     'Name': [
-        'Ugali-samaki', 'wali-nyama', 'wali-samaki', 'pilau-nyama',
+        'Ugali-msamaki', 'wali-nyama', 'wali-samaki', 'pilau-nyama',
         'pilau-samaki', 'wali-maharage', 'chipsi-kavu', 'chipsi-mayai',
         'mshikaki-kuku', 'mshikaki-ng\'ombe', 'juice', 'soda',
         'maji', 'ndizi-choma', 'chapati'
@@ -114,7 +56,6 @@ menu_df = pd.DataFrame({
 orders_df = load_data("Orders")
 expenses_df = load_data("Expenses")
 
-
 # ----------------- BRAND HEADERS -----------------
 st.markdown("<div class='brand-title'>⚡ 4G_fastfood System</div>", unsafe_allow_html=True)
 st.markdown("<div class='brand-subtitle'>Huduma ya Haraka, Chakula Kitamu na Mifumo ya Kisasa</div>", unsafe_allow_html=True)
@@ -122,7 +63,7 @@ st.markdown("<div class='brand-subtitle'>Huduma ya Haraka, Chakula Kitamu na Mif
 tab1, tab2, tab3 = st.tabs(["🛒 Agiza Chakula (Ordering)", "🧑‍🍳 Staff Dashboard", "📊 Financial Admin"])
 
 # ==============================================================================
-# TAB 1: BRANDED CUSTOMER VIEW
+# TAB 1: CUSTOMER VIEW
 # ==============================================================================
 with tab1:
     st.markdown("<div class='section-header'>Chagua Menyu Yako Safi Chini</div>", unsafe_allow_html=True)
@@ -177,40 +118,45 @@ with tab1:
                 new_row = pd.DataFrame([{
                     'Order_ID': order_id, 'Customer_Name': c_name, 'Phone_Number': c_phone,
                     'Items_Ordered': items_str, 'Total_Amount': grand_total,
-                    'Delivery_Required': delivery, 'Delivery_Address': address,
+                    'Delivery_Required': str(delivery), 'Delivery_Address': address,
                     'Status': 'Pending', 'Timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     'Assigned_Staff': 'Unassigned'
                 }])
                 
-                updated_orders = pd.concat([orders_df, new_row], ignore_index=True)
-                conn.update(worksheet="Orders", data=updated_orders)
-                st.balloons()
-                st.success(f"🎉 Imefanikiwa! Oda yako imetumwa kwenda 4G_fastfood Kitchen. ID: #{order_id}")
-                st.rerun()
+                try:
+                    updated_orders = pd.concat([orders_df, new_row], ignore_index=True)
+                    conn.update(worksheet="Orders", data=updated_orders)
+                    st.balloons()
+                    st.success(f"🎉 Imefanikiwa! Oda yako imetumwa kwenda 4G_fastfood Kitchen. ID: #{order_id}")
+                    st.rerun()
+                except Exception as e:
+                    st.error("Kuchapisha kumeshindwa. Tafadhali thibitisha ikiwa Google Sheet yako imewekwa kama 'Editor' kwa 'Anyone with link'.")
 
 # ==============================================================================
-# TAB 2: BRANDED STAFF DASHBOARD
+# TAB 2: STAFF DASHBOARD
 # ==============================================================================
 with tab2:
     st.markdown("<div class='section-header'>Oda Zinazosubiri Jikoni (Pending Verification)</div>", unsafe_allow_html=True)
     
     if not orders_df.empty:
+        orders_df['Order_ID'] = orders_df['Order_ID'].astype(str)
         pending_orders = orders_df[orders_df['Status'] == 'Pending']
+        
         if pending_orders.empty:
             st.info("Safi sana! Hakuna oda zinazosubiri kupikwa kwa sasa.")
         else:
             for idx, row in pending_orders.iterrows():
                 with st.expander(f"📋 Oda #{row['Order_ID']} — Mteja: {row['Customer_Name']}"):
                     st.write(f"**Chakula:** {row['Items_Ordered']}")
-                    st.write(f"**Kiasi cha Pesa:** TZS {row['Total_Amount']:,}")
+                    st.write(f"**Kiasi cha Pesa:** TZS {int(float(row['Total_Amount'])):,}")
                     
                     staff_handler = st.text_input("Jina lako (Mhudumu Handler):", key=f"staff_{row['Order_ID']}")
                     if st.button("Thibitisha / Approve Order", key=f"btn_{row['Order_ID']}"):
-                        orders_df.loc[orders_df['Order_ID'] == row['Order_ID'], 'Status'] = 'Approved'
-                        orders_df.loc[orders_df['Order_ID'] == row['Order_ID'], 'Assigned_Staff'] = staff_handler if staff_handler else "4G Staff"
+                        orders_df.loc[orders_df['Order_ID'] == str(row['Order_ID']), 'Status'] = 'Approved'
+                        orders_df.loc[orders_df['Order_ID'] == str(row['Order_ID']), 'Assigned_Staff'] = staff_handler if staff_handler else "4G Staff"
                         
                         conn.update(worksheet="Orders", data=orders_df)
-                        st.success("Oda imethibitishwa na kusasishwa live!")
+                        st.success("Oda imethibitishwa!")
                         st.rerun()
     else:
         st.info("Hakuna taarifa za oda zilizopatikana kwenye mfumo.")
@@ -226,7 +172,6 @@ with tab2:
             if select_id:
                 row_data = approved_orders[approved_orders['Order_ID'] == select_id].iloc[0]
                 
-                # Build beautiful layout text
                 message = (
                     f"⚡ *4G_fastfood INVOICE*\n"
                     f"----------------------------------------\n"
@@ -236,7 +181,7 @@ with tab2:
                     f"*Chakula Kilichoagizwa:*\n"
                     f" {row_data['Items_Ordered']}\n"
                     f"----------------------------------------\n"
-                    f"💰 *JUMLA KUU:* TZS {row_data['Total_Amount']:,}\n\n"
+                    f"💰 *JUMLA KUU:* TZS {int(float(row_data['Total_Amount'])):,}\n\n"
                     f"Asante kwa kuagiza chakula kutoka kwetu!"
                 )
                 
@@ -248,7 +193,7 @@ with tab2:
                 st.markdown(f"[➡️ TUMA HII RISITI KWA WHATSAPP YA MTEJA]({wa_link})", unsafe_allow_html=True)
 
 # ==============================================================================
-# TAB 3: BRANDED FINANCIAL ADMIN
+# TAB 3: FINANCIAL ADMIN
 # ==============================================================================
 with tab3:
     st.markdown("<div class='section-header'>Mizania ya Fedha & Matumizi</div>", unsafe_allow_html=True)
@@ -269,19 +214,25 @@ with tab3:
             }])
             updated_expenses = pd.concat([expenses_df, new_ex], ignore_index=True)
             conn.update(worksheet="Expenses", data=updated_expenses)
-            st.success("Matumizi yamehifadhiwa kwenye Cloud Spreadsheet!")
+            st.success("Matumizi yamehifadhiwa!")
             st.rerun()
             
     with col_f2:
         st.subheader("Muhtasari wa Faida na Hasara")
-        total_inc = orders_df[orders_df['Status'] == 'Approved']['Total_Amount'].sum() if not orders_df.empty else 0
-        total_exp = expenses_df['Amount'].sum() if not expenses_df.empty else 0
+        total_inc = 0
+        if not orders_df.empty:
+            total_inc = pd.to_numeric(orders_df[orders_df['Status'] == 'Approved']['Total_Amount']).sum()
+        
+        total_exp = 0
+        if not expenses_df.empty:
+            total_exp = pd.to_numeric(expenses_df['Amount']).sum()
+            
         net_prof = total_inc - total_exp
         
-        st.metric(label="Jumla ya Mapato (Income)", value=f"TZS {total_inc:,}")
-        st.metric(label="Jumla ya Matumizi (Expenses)", value=f"TZS {total_exp:,}")
+        st.metric(label="Jumla ya Mapato (Income)", value=f"TZS {int(total_inc):,}")
+        st.metric(label="Jumla ya Matumizi (Expenses)", value=f"TZS {int(total_exp):,}")
         
         if net_prof >= 0:
-            st.metric(label="FAIDA KUU (Net Profit)", value=f"TZS {net_prof:,}", delta="Mwelekeo Unaridhisha ✅")
+            st.metric(label="FAIDA KUU (Net Profit)", value=f"TZS {int(net_prof):,}", delta="Mwelekeo Unaridhisha ✅")
         else:
-            st.metric(label="HASARA (Net Loss)", value=f"TZS {abs(net_prof):,}", delta="- Hasara Kwenye Biashara")
+            st.metric(label="HASARA (Net Loss)", value=f"TZS {int(abs(net_prof)):,}", delta="- Hasara Kwenye Biashara")
