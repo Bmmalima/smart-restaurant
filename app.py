@@ -32,7 +32,6 @@ st.markdown(f'<a href="{support_url}" target="_blank" class="floating-wa">💬 C
 # ----------------- DATABASE INITIALIZATION & LIVE SYNC -----------------
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Explicitly defining column rules to avoid index crashes on blank spreadsheets
 ORDER_COLS = ['Order_ID', 'Customer_Name', 'Phone_Number', 'Items_Ordered', 'Total_Amount', 'Delivery_Required', 'Delivery_Address', 'Status', 'Timestamp', 'Assigned_Staff']
 EXPENSE_COLS = ['Expense_ID', 'Date', 'Category', 'Vendor', 'Description', 'Amount']
 
@@ -41,7 +40,6 @@ def load_data(worksheet_name, default_cols):
         df = conn.read(worksheet=worksheet_name, ttl=0)
         if df is None or df.empty:
             return pd.DataFrame(columns=default_cols)
-        # Drop rows where critical tracking identities are entirely missing
         df.dropna(how='all', inplace=True)
         return df
     except Exception:
@@ -61,34 +59,38 @@ def add_row_to_sheet(worksheet_name, row_list):
         st.error(f"Failed to reach database pipeline: {e}")
         return False
 
-# Menu Matrix
-menu_df = pd.DataFrame({
-    'Item_ID': range(1, 16),
-    'Name': [
-        'Ugali-msamaki', 'wali-nyama', 'wali-samaki', 'pilau-nyama',
-        'pilau-samaki', 'wali-maharage', 'chipsi-kavu', 'chipsi-mayai',
-        'mshikaki-kuku', 'mshikaki-ng\'ombe', 'juice', 'soda',
-        'maji', 'ndizi-choma', 'chapati'
-    ],
-    'Category': [
-        'Chakula', 'Chakula', 'Chakula', 'Chakula', 'Chakula', 'Chakula', 'Chakula', 'Chakula',
-        'Vitafunio', 'Vitafunio', 'Vinywaji', 'Vinywaji', 'Vinywaji', 'Vitafunio', 'Vitafunio'
-    ],
-    'Price': [2000, 2500, 2000, 2500, 5000, 2000, 2000, 3000, 1000, 500, 1000, 700, 700, 1500, 500]
-})
-
 # Initialize Operational Data Frames Live
 orders_df = load_data("Orders", ORDER_COLS)
 expenses_df = load_data("Expenses", EXPENSE_COLS)
+
+# Dynamic Menu State Tracker Setup
+if 'dynamic_menu' not in st.session_state:
+    st.session_state.dynamic_menu = pd.DataFrame({
+        'Item_ID': range(1, 16),
+        'Name': [
+            'Ugali-msamaki', 'wali-nyama', 'wali-samaki', 'pilau-nyama',
+            'pilau-samaki', 'wali-maharage', 'chipsi-kavu', 'chipsi-mayai',
+            'mshikaki-kuku', 'mshikaki-ng\'ombe', 'juice', 'soda',
+            'maji', 'ndizi-choma', 'chapati'
+        ],
+        'Category': [
+            'Chakula', 'Chakula', 'Chakula', 'Chakula', 'Chakula', 'Chakula', 'Chakula', 'Chakula',
+            'Vitafunio', 'Vitafunio', 'Vinywaji', 'Vinywaji', 'Vinywaji', 'Vitafunio', 'Vitafunio'
+        ],
+        'Price': [2000, 2500, 2000, 2500, 5000, 2000, 2000, 3000, 1000, 500, 1000, 700, 700, 1500, 500]
+    })
+
+if 'attendance_log' not in st.session_state:
+    st.session_state.attendance_log = pd.DataFrame(columns=['Staff_Name', 'Action', 'Timestamp'])
 
 # ----------------- BRAND HEADERS -----------------
 st.markdown("<div class='brand-title'>⚡ 4G_fastfood System</div>", unsafe_allow_html=True)
 st.markdown("<div class='brand-subtitle'>Huduma ya Haraka, Chakula Kitamu na Mifumo ya Kisasa</div>", unsafe_allow_html=True)
 
-tab1, tab2, tab3 = st.tabs(["🛒 Agiza Chakula (Ordering)", "🧑‍🍳 Staff Dashboard", "📊 Financial Admin"])
+tab1, tab2, tab3, tab4 = st.tabs(["🛒 Agiza Chakula", "🧑‍🍳 Staff Dashboard", "📊 Financial Admin", "📋 Staff Attendance"])
 
 # ==============================================================================
-# TAB 1: CUSTOMER VIEW
+# TAB 1: CUSTOMER ORDER VIEW
 # ==============================================================================
 with tab1:
     st.markdown("<div class='section-header'>Chagua Menyu Yako Safi Chini</div>", unsafe_allow_html=True)
@@ -96,14 +98,15 @@ with tab1:
     
     with col1:
         cart = {}
-        for category in menu_df['Category'].unique():
+        current_menu = st.session_state.dynamic_menu
+        for category in current_menu['Category'].unique():
             st.write(f"### 🟢 **{category.upper()}**")
-            sub_df = menu_df[menu_df['Category'] == category]
+            sub_df = current_menu[current_menu['Category'] == category]
             for _, row in sub_df.iterrows():
                 with st.container():
                     st.markdown(f"""
                     <div class='menu-card'>
-                        <span class='price-tag'>TZS {row['Price']:,}</span>
+                        <span class='price-tag'>TZS {int(row['Price']):,}</span>
                         <strong>{row['Name']}</strong>
                     </div>
                     """, unsafe_allow_html=True)
@@ -113,21 +116,16 @@ with tab1:
     
     with col2:
         st.subheader("Taarifa za Mteja")
-        
-        st.markdown("<span class='field-label'>👤 Jina Lako Kamili (Full Name):</span>", unsafe_allow_html=True)
-        c_name = st.text_input("", placeholder="Mfn: John Doe", key="customer_name_input")
-        
-        st.markdown("<span class='field-label'>📞 Namba yako ya WhatsApp (Phone Number):</span>", unsafe_allow_html=True)
-        c_phone = st.text_input("", placeholder="Mfn: 255615288736", key="customer_phone_input")
+        c_name = st.text_input("Jina Lako Kamili (Full Name):", placeholder="Mfn: John Doe")
+        c_phone = st.text_input("Namba yako ya WhatsApp (Phone Number):", placeholder="Mfn: 255615288736")
         
         st.markdown("<br>", unsafe_allow_html=True)
         delivery = st.checkbox("Je unahitaji usafirishaji nyumbani (Delivery)?")
         
-        address = "N/A (Dine-in / Pickup)"
+        address = "N/A"
         delivery_fee = 1500 if delivery else 0
         if delivery:
-            st.markdown("<span class='field-label'>📍 Sehemu Unayokaa (Delivery Address):</span>", unsafe_allow_html=True)
-            address = st.text_area("", placeholder="Weka maelezo ya eneo unalopo...", key="customer_address_input")
+            address = st.text_area("Sehemu Unayokaa (Delivery Address):", placeholder="Weka maelezo ya eneo...")
 
         st.markdown("---")
         st.write("### 🧾 Muhtasari wa Garama")
@@ -144,7 +142,6 @@ with tab1:
             if not c_name or not c_phone or not cart:
                 st.error("Tafadhali kamilisha kujaza jina, namba na uchague chakula!")
             else:
-                # Calculate simple incremental IDs safely
                 try:
                     if not orders_df.empty and 'Order_ID' in orders_df.columns:
                         valid_ids = pd.to_numeric(orders_df['Order_ID'], errors='coerce').dropna()
@@ -166,11 +163,34 @@ with tab1:
                     if add_row_to_sheet("Orders", row_data):
                         st.balloons()
                         st.success(f"🎉 Imefanikiwa! Oda yako imetumwa kwenda 4G_fastfood Kitchen. ID: #{order_id}")
-                        # Soft loading reset to refresh page data cleanly
-                        st.info("Inapakia upya taarifa...")
-                        st.rerun()
-                    else:
-                        st.error("Oda haikuweza kutumwa. Tafadhali angalia kama umeweka Google App Script vizuri.")
+                        
+                        # --- GENERATE THANK YOU WHATSAPP MESSAGE ---
+                        thank_you_text = (
+                            f"Habari *{c_name}*,\n\n"
+                            f"Asante sana kwa kuweka oda yako na *4G_fastfood*! 🙏🍔\n\n"
+                            f"📝 *Muhtasari wa Oda Yako (# {order_id}):*\n"
+                            f"• *Chakula:* {items_str}\n"
+                            f"• *Jumla Kuu:* TZS {grand_total:,}\n\n"
+                            f"Oda yako imepokelewa jikoni kwetu na inafanyiwa kazi sasa hivi. Tutakuarifu ikishakuwa tayari! Tunakuthamini sana."
+                        )
+                        
+                        # Format the phone number cleanly
+                        formatted_phone = str(c_phone).replace("+", "").strip()
+                        if formatted_phone.startswith("0"):
+                            formatted_phone = "255" + formatted_phone[1:]
+                        
+                        encoded_thanks = urllib.parse.quote(thank_you_text)
+                        thanks_wa_url = f"https://api.whatsapp.com/send?phone={formatted_phone}&text={encoded_thanks}"
+                        
+                        # Display direct confirmation button
+                        st.markdown(f"""
+                            <div style="background-color: #E8F5E9; padding: 20px; border-radius: 10px; border: 2px solid #2E7D32; text-align: center; margin-top: 15px;">
+                                <h4 style="color: #1B5E20; margin-bottom: 10px;">Hatua ya Mwisho: Tuma Shukrani</h4>
+                                <a href="{thanks_wa_url}" target="_blank" style="background-color: #25D366; color: white; padding: 12px 24px; text-decoration: none; font-weight: bold; border-radius: 25px; display: inline-block; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
+                                    👉 Fungua WhatsApp Kutuma Shukrani
+                                </a>
+                            </div>
+                        """, unsafe_allow_html=True)
 
 # ==============================================================================
 # TAB 2: STAFF DASHBOARD
@@ -180,7 +200,6 @@ with tab2:
     
     if not orders_df.empty and 'Status' in orders_df.columns:
         orders_df['Order_ID'] = orders_df['Order_ID'].astype(str)
-        # Handle string cleanup case variables
         orders_df['Status'] = orders_df['Status'].astype(str).str.strip()
         pending_orders = orders_df[orders_df['Status'] == 'Pending']
         
@@ -188,7 +207,26 @@ with tab2:
             st.info("Safi sana! Hakuna oda zinazosubiri kupikwa kwa sasa.")
         else:
             st.dataframe(pending_orders, use_container_width=True)
-            st.info("💡 Badilisha hadhi ya oda yako (Mfn: kutoka 'Pending' kwenda 'Approved') moja kwa moja kwenye Google Sheet yako, na itajisasisha hapa kiotomatiki pindi ukurasa ukipakia!")
+            
+            st.subheader("⚙️ On-Screen Quick Actions")
+            selected_order = st.selectbox("Chagua Order ID ya Kushughulikia:", pending_orders['Order_ID'].values)
+            handler = st.text_input("Mhudumu Handler (Your Name):")
+            
+            if st.button("Change Status to APPROVED", type="primary"):
+                if not handler:
+                    st.warning("Tafadhali weka jina lako kabla ya ku-approve!")
+                else:
+                    approval_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    matched_row = pending_orders[pending_orders['Order_ID'] == selected_order].iloc[0]
+                    
+                    update_row = [
+                        selected_order, matched_row['Customer_Name'], matched_row['Phone_Number'],
+                        matched_row['Items_Ordered'], matched_row['Total_Amount'], matched_row['Delivery_Required'],
+                        matched_row['Delivery_Address'], 'Approved', approval_timestamp, handler
+                    ]
+                    if add_row_to_sheet("Orders", update_row):
+                        st.success(f"Oda #{selected_order} imehifadhiwa ikiwa imethibitishwa!")
+                        st.rerun()
     else:
         st.info("Safi sana! Hakuna oda zinazosubiri kupikwa kwa sasa.")
 
@@ -196,16 +234,39 @@ with tab2:
     if not orders_df.empty and 'Status' in orders_df.columns:
         approved_orders = orders_df[orders_df['Status'].astype(str).str.strip() == 'Approved']
         if not approved_orders.empty:
-            st.dataframe(approved_orders[['Order_ID', 'Customer_Name', 'Items_Ordered', 'Total_Amount', 'Assigned_Staff']], use_container_width=True)
+            st.dataframe(approved_orders[['Order_ID', 'Customer_Name', 'Items_Ordered', 'Total_Amount', 'Assigned_Staff', 'Timestamp']], use_container_width=True)
         else:
             st.write("Hakuna oda zilizothibitishwa bado.")
-    else:
-        st.write("Hakuna oda zilizothibitishwa bado.")
 
 # ==============================================================================
-# TAB 3: FINANCIAL ADMIN
+# TAB 3: FINANCIAL ADMIN & MENU MANAGER
 # ==============================================================================
 with tab3:
+    st.markdown("<div class='section-header'>Usimamizi wa Menyu (Add New Foods & Prices)</div>", unsafe_allow_html=True)
+    col_m1, col_m2 = st.columns(2)
+    
+    with col_m1:
+        st.subheader("Ongeza Chakula Kipya Kwenye Menyu")
+        new_food_name = st.text_input("Jina la Chakula (e.g., Wali-Kuku Special):")
+        new_food_cat = st.selectbox("Kundi / Category:", ["Chakula", "Vitafunio", "Vinywaji"])
+        new_food_price = st.number_input("Bei yake (TZS):", min_value=0, step=100)
+        
+        if st.button("Hifadhi Chakula Kipya kwenye Mfumo"):
+            if not new_food_name:
+                st.error("Tafadhali andika jina la chakula!")
+            else:
+                next_id = len(st.session_state.dynamic_menu) + 1
+                new_item = pd.DataFrame([{
+                    'Item_ID': next_id, 'Name': new_food_name, 'Category': new_food_cat, 'Price': new_food_price
+                }])
+                st.session_state.dynamic_menu = pd.concat([st.session_state.dynamic_menu, new_item], ignore_index=True)
+                st.success(f"🤩 Safi! {new_food_name} kimeongezwa kwenye menyu ya wateja!")
+                st.rerun()
+                
+    with col_m2:
+        st.subheader("Orodha ya Menyu Iliyopo Sasa")
+        st.dataframe(st.session_state.dynamic_menu, use_container_width=True)
+
     st.markdown("<div class='section-header'>Mizania ya Fedha & Matumizi</div>", unsafe_allow_html=True)
     col_f1, col_f2 = st.columns(2)
     
@@ -247,10 +308,38 @@ with tab3:
             
         net_prof = total_inc - total_exp
         
-        st.metric(label="Jumla ya Mapato kutoka Approved Orders", value=f"TZS {int(total_inc):,}")
+        st.metric(label="Jumla ya Mapato (Approved Orders)", value=f"TZS {int(total_inc):,}")
         st.metric(label="Jumla ya Matumizi (Expenses)", value=f"TZS {int(total_exp):,}")
         
         if net_prof >= 0:
             st.metric(label="FAIDA KUU (Net Profit)", value=f"TZS {int(net_prof):,}", delta="Mwelekeo Unaridhisha ✅")
         else:
             st.metric(label="HASARA (Net Loss)", value=f"TZS {int(abs(net_prof)):,}", delta="- Hasara Kwenye Biashara")
+
+# ==============================================================================
+# TAB 4: STAFF ATTENDANCE TRACKER
+# ==============================================================================
+with tab4:
+    st.markdown("<div class='section-header'>📋 Mahudhurio ya Wafanyakazi (Staff Attendance)</div>", unsafe_allow_html=True)
+    col_a1, col_a2 = st.columns(2)
+    
+    with col_a1:
+        st.subheader("Sajili Mahudhurio Yako")
+        staff_member = st.selectbox("Chagua Jina Lako:", ["Mhudumu 1", "Mpishi Mkuu", "Driver Delivery", "Admin Partner"])
+        attendance_action = st.radio("Unachagua kufanya nini?", ["Clock In (Kuingia Kazini)", "Clock Out (Kutoka Kazini)"])
+        
+        if st.button("Hifadhi Mahudhurio"):
+            now_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            log_entry = pd.DataFrame([{
+                'Staff_Name': staff_member, 'Action': attendance_action, 'Timestamp': now_time
+            }])
+            st.session_state.attendance_log = pd.concat([st.session_state.attendance_log, log_entry], ignore_index=True)
+            st.success(f"✅ Vizuri! Umefanikiwa kuweka {attendance_action} kwa ajili ya {staff_member}!")
+            st.rerun()
+            
+    with col_a2:
+        st.subheader("Ripoti ya Leo ya Mahudhurio")
+        if not st.session_state.attendance_log.empty:
+            st.dataframe(st.session_state.attendance_log, use_container_width=True)
+        else:
+            st.info("Hakuna mfanyakazi aliyeingia au kutoka kazini bado kwa siku ya leo.")
