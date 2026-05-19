@@ -18,11 +18,13 @@ st.markdown("""
     .menu-card strong { font-size: 18px; color: #1B5E20; }
     .price-tag { color: #E65100; font-weight: bold; font-size: 16px; float: right; }
     .floating-wa { position: fixed; bottom: 25px; right: 25px; background-color: #25D366; color: white !important; padding: 14px 22px; border-radius: 50px; font-weight: bold; font-size: 16px; box-shadow: 0px 5px 15px rgba(0,0,0,0.3); z-index: 999999; text-decoration: none !important; }
+    
+    /* Custom Field Label Styles */
+    .field-label { font-size: 16px; font-weight: bold; color: #1B5E20; margin-top: 10px; margin-bottom: -5px; display: block; }
     </style>
 """, unsafe_allow_html=True)
 
 # ----------------- FLOATING WHATSAPP CUSTOMER SERVICE -----------------
-# UPDATED: Your new business phone line
 SUPPORT_PHONE = "255615288736" 
 encoded_support_msg = urllib.parse.quote("Hello 4G_fastfood, nahitaji msaada/huduma tafadhali.")
 support_url = f"https://api.whatsapp.com/send?phone={SUPPORT_PHONE}&text={encoded_support_msg}"
@@ -87,15 +89,23 @@ with tab1:
                         cart[row['Name']] = {'qty': qty, 'price': row['Price']}
     
     with col2:
-        st.subheader("Taarifa za Mteja & Usafirishaji")
-        c_name = st.text_input("Jina Lako Kamili:")
-        c_phone = st.text_input("Namba ya WhatsApp (Mfano: 255712345678):")
+        st.subheader("Taarifa za Mteja")
+        
+        # ADDED CLEAR TITLE LABELS HERE
+        st.markdown("<span class='field-label'>👤 Jina Lako Kamili (Full Name):</span>", unsafe_allow_html=True)
+        c_name = st.text_input("", placeholder="Mfn: John Doe", key="customer_name_input")
+        
+        st.markdown("<span class='field-label'>📞 Namba yako ya WhatsApp (Phone Number):</span>", unsafe_allow_html=True)
+        c_phone = st.text_input("", placeholder="Mfn: 255615288736", key="customer_phone_input")
+        
+        st.markdown("<br>", unsafe_allow_html=True)
         delivery = st.checkbox("Je unahitaji usafirishaji nyumbani (Delivery)?")
         
         address = "N/A (Dine-in / Pickup)"
         delivery_fee = 1500 if delivery else 0
         if delivery:
-            address = st.text_area("Ingiza Sehemu Unayokaa kwa Usahihi:")
+            st.markdown("<span class='field-label'>📍 Sehemu Unayokaa (Delivery Address):</span>", unsafe_allow_html=True)
+            address = st.text_area("", placeholder="Weka maelezo ya eneo unalopo...", key="customer_address_input")
 
         st.markdown("---")
         st.write("### 🧾 Muhtasari wa Garama")
