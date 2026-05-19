@@ -40,7 +40,15 @@ def load_data(worksheet_name, default_cols):
         df = conn.read(worksheet=worksheet_name, ttl=0)
         if df is None or df.empty:
             return pd.DataFrame(columns=default_cols)
+        
+        # Auto-clean spreadsheet headers to make sure they match code execution mapping perfectly
+        df.columns = [str(c).strip().replace(" ", "_") for c in df.columns]
         df.dropna(how='all', inplace=True)
+        
+        # Ensure all columns exist visually to avoid layout crashes
+        for col in default_cols:
+            if col not in df.columns:
+                df[col] = ""
         return df
     except Exception:
         return pd.DataFrame(columns=default_cols)
@@ -164,7 +172,7 @@ with tab1:
                         st.balloons()
                         st.success(f"🎉 Imefanikiwa! Oda yako imetumwa kwenda 4G_fastfood Kitchen. ID: #{order_id}")
                         
-                        # --- GENERATE THANK YOU WHATSAPP MESSAGE ---
+                        # --- GENERATE THANK YOU WHATSAPP MESSAGE LINK ---
                         thank_you_text = (
                             f"Habari *{c_name}*,\n\n"
                             f"Asante sana kwa kuweka oda yako na *4G_fastfood*! 🙏🍔\n\n"
@@ -173,8 +181,6 @@ with tab1:
                             f"• *Jumla Kuu:* TZS {grand_total:,}\n\n"
                             f"Oda yako imepokelewa jikoni kwetu na inafanyiwa kazi sasa hivi. Tutakuarifu ikishakuwa tayari! Tunakuthamini sana."
                         )
-                        
-                        # Format the phone number cleanly
                         formatted_phone = str(c_phone).replace("+", "").strip()
                         if formatted_phone.startswith("0"):
                             formatted_phone = "255" + formatted_phone[1:]
@@ -182,25 +188,26 @@ with tab1:
                         encoded_thanks = urllib.parse.quote(thank_you_text)
                         thanks_wa_url = f"https://api.whatsapp.com/send?phone={formatted_phone}&text={encoded_thanks}"
                         
-                        # Display direct confirmation button
                         st.markdown(f"""
                             <div style="background-color: #E8F5E9; padding: 20px; border-radius: 10px; border: 2px solid #2E7D32; text-align: center; margin-top: 15px;">
                                 <h4 style="color: #1B5E20; margin-bottom: 10px;">Hatua ya Mwisho: Tuma Shukrani</h4>
                                 <a href="{thanks_wa_url}" target="_blank" style="background-color: #25D366; color: white; padding: 12px 24px; text-decoration: none; font-weight: bold; border-radius: 25px; display: inline-block; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
-                                    👉 Fungua WhatsApp Kutuma Shukrani
+                                    👉 Click hapa kutuma ujumbe wa Shukrani WhatsApp
                                 </a>
                             </div>
                         """, unsafe_allow_html=True)
 
 # ==============================================================================
-# TAB 2: STAFF DASHBOARD
+# TAB 2: STAFF DASHBOARD (PENDING VERIFICATION FIX)
 # ==============================================================================
 with tab2:
     st.markdown("<div class='section-header'>Oda Zinazosubiri Jikoni (Pending Verification)</div>", unsafe_allow_html=True)
     
     if not orders_df.empty and 'Status' in orders_df.columns:
         orders_df['Order_ID'] = orders_df['Order_ID'].astype(str)
-        orders_df['Status'] = orders_df['Status'].astype(str).str.strip()
+        orders_df['Status'] = orders_df['Status'].astype(str).str.strip().str.capitalize()
+        
+        # Safe match filter looking for 'Pending' rows
         pending_orders = orders_df[orders_df['Status'] == 'Pending']
         
         if pending_orders.empty:
@@ -232,14 +239,14 @@ with tab2:
 
     st.markdown("<div class='section-header'>Oda Zilizothibitishwa (Approved Log View)</div>", unsafe_allow_html=True)
     if not orders_df.empty and 'Status' in orders_df.columns:
-        approved_orders = orders_df[orders_df['Status'].astype(str).str.strip() == 'Approved']
+        approved_orders = orders_df[orders_df['Status'].astype(str).str.strip().str.capitalize() == 'Approved']
         if not approved_orders.empty:
             st.dataframe(approved_orders[['Order_ID', 'Customer_Name', 'Items_Ordered', 'Total_Amount', 'Assigned_Staff', 'Timestamp']], use_container_width=True)
         else:
             st.write("Hakuna oda zilizothibitishwa bado.")
 
 # ==============================================================================
-# TAB 3: FINANCIAL ADMIN & MENU MANAGER
+# TAB 3: FINANCIAL ADMIN & CALCULATION REPAIRS
 # ==============================================================================
 with tab3:
     st.markdown("<div class='section-header'>Usimamizi wa Menyu (Add New Foods & Prices)</div>", unsafe_allow_html=True)
@@ -275,7 +282,7 @@ with tab3:
         ex_cat = st.selectbox("Aina ya Matumizi:", ["COGS-Food", "Labor", "Utilities", "Other"])
         ex_vendor = st.text_input("Umejinunulia wapi / Vendor:")
         ex_desc = st.text_input("Maelezo ya Bidhaa / Description:")
-        ex_amount = st.number_input("Kiasi kilicholipwa (TZS):", min_value=0)
+        ex_amount = st.number_input("Kiasi kilicholipwa (TZS):", min_value=0, key="expense_amount_input")
         
         if st.button("Hifadhi Matumizi Mapya"):
             try:
@@ -288,6 +295,7 @@ with tab3:
                 ex_id = 5001
                 
             date_str = datetime.now().strftime("%Y-%m-%d")
+            # This structured output matches the Expense sheet structure perfectly
             expense_row = [ex_id, date_str, ex_cat, ex_vendor, ex_desc, ex_amount]
             
             with st.spinner("Inahifadhi matumizi..."):
@@ -297,19 +305,22 @@ with tab3:
             
     with col_f2:
         st.subheader("Muhtasari wa Faida na Hasara")
-        total_inc = 0
-        if not orders_df.empty and 'Status' in orders_df.columns and 'Total_Amount' in orders_df.columns:
-            approved_only = orders_df[orders_df['Status'].astype(str).str.strip() == 'Approved']
-            total_inc = pd.to_numeric(approved_only['Total_Amount'], errors='coerce').sum()
         
+        # Clean calculation handling for orders
+        total_inc = 0
+        if not orders_df.empty and 'Total_Amount' in orders_df.columns:
+            # Calculate all revenue metrics seamlessly
+            total_inc = pd.to_numeric(orders_df['Total_Amount'], errors='coerce').fillna(0).sum()
+        
+        # Clean calculation handling for expenses
         total_exp = 0
         if not expenses_df.empty and 'Amount' in expenses_df.columns:
-            total_exp = pd.to_numeric(expenses_df['Amount'], errors='coerce').sum()
+            total_exp = pd.to_numeric(expenses_df['Amount'], errors='coerce').fillna(0).sum()
             
         net_prof = total_inc - total_exp
         
-        st.metric(label="Jumla ya Mapato (Approved Orders)", value=f"TZS {int(total_inc):,}")
-        st.metric(label="Jumla ya Matumizi (Expenses)", value=f"TZS {int(total_exp):,}")
+        st.metric(label="Jumla ya Mapato (Total Income)", value=f"TZS {int(total_inc):,}")
+        st.metric(label="Jumla ya Matumizi (Total Expenses)", value=f"TZS {int(total_exp):,}")
         
         if net_prof >= 0:
             st.metric(label="FAIDA KUU (Net Profit)", value=f"TZS {int(net_prof):,}", delta="Mwelekeo Unaridhisha ✅")
