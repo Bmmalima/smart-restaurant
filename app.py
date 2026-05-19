@@ -41,7 +41,7 @@ def load_data(worksheet_name, default_cols):
         if df is None or df.empty:
             return pd.DataFrame(columns=default_cols)
         
-        # Auto-clean spreadsheet headers to make sure they match code execution mapping perfectly
+        # Auto-clean spreadsheet headers to match code mapping perfectly
         df.columns = [str(c).strip().replace(" ", "_") for c in df.columns]
         df.dropna(how='all', inplace=True)
         
@@ -198,7 +198,7 @@ with tab1:
                         """, unsafe_allow_html=True)
 
 # ==============================================================================
-# TAB 2: STAFF DASHBOARD (PENDING VERIFICATION FIX)
+# TAB 2: STAFF DASHBOARD
 # ==============================================================================
 with tab2:
     st.markdown("<div class='section-header'>Oda Zinazosubiri Jikoni (Pending Verification)</div>", unsafe_allow_html=True)
@@ -207,7 +207,6 @@ with tab2:
         orders_df['Order_ID'] = orders_df['Order_ID'].astype(str)
         orders_df['Status'] = orders_df['Status'].astype(str).str.strip().str.capitalize()
         
-        # Safe match filter looking for 'Pending' rows
         pending_orders = orders_df[orders_df['Status'] == 'Pending']
         
         if pending_orders.empty:
@@ -246,7 +245,7 @@ with tab2:
             st.write("Hakuna oda zilizothibitishwa bado.")
 
 # ==============================================================================
-# TAB 3: FINANCIAL ADMIN & CALCULATION REPAIRS
+# TAB 3: FINANCIAL ADMIN (CALCULATION REPAIRS)
 # ==============================================================================
 with tab3:
     st.markdown("<div class='section-header'>Usimamizi wa Menyu (Add New Foods & Prices)</div>", unsafe_allow_html=True)
@@ -295,7 +294,6 @@ with tab3:
                 ex_id = 5001
                 
             date_str = datetime.now().strftime("%Y-%m-%d")
-            # This structured output matches the Expense sheet structure perfectly
             expense_row = [ex_id, date_str, ex_cat, ex_vendor, ex_desc, ex_amount]
             
             with st.spinner("Inahifadhi matumizi..."):
@@ -306,20 +304,24 @@ with tab3:
     with col_f2:
         st.subheader("Muhtasari wa Faida na Hasara")
         
-        # Clean calculation handling for orders
+        # Calculate income from Approved orders
         total_inc = 0
         if not orders_df.empty and 'Total_Amount' in orders_df.columns:
-            # Calculate all revenue metrics seamlessly
-            total_inc = pd.to_numeric(orders_df['Total_Amount'], errors='coerce').fillna(0).sum()
+            # We filter for Approved orders to get actual revenue
+            if 'Status' in orders_df.columns:
+                approved_df = orders_df[orders_df['Status'].astype(str).str.strip().str.capitalize() == 'Approved']
+                total_inc = pd.to_numeric(approved_df['Total_Amount'], errors='coerce').fillna(0).sum()
+            else:
+                total_inc = pd.to_numeric(orders_df['Total_Amount'], errors='coerce').fillna(0).sum()
         
-        # Clean calculation handling for expenses
+        # Calculate expenses
         total_exp = 0
         if not expenses_df.empty and 'Amount' in expenses_df.columns:
             total_exp = pd.to_numeric(expenses_df['Amount'], errors='coerce').fillna(0).sum()
             
         net_prof = total_inc - total_exp
         
-        st.metric(label="Jumla ya Mapato (Total Income)", value=f"TZS {int(total_inc):,}")
+        st.metric(label="Jumla ya Mapato (Approved Orders)", value=f"TZS {int(total_inc):,}")
         st.metric(label="Jumla ya Matumizi (Total Expenses)", value=f"TZS {int(total_exp):,}")
         
         if net_prof >= 0:
