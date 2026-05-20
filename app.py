@@ -23,16 +23,26 @@ st.markdown("""
     .receipt-box { background-color: #FFFFFF; border: 2px dashed #333333; padding: 20px; max-width: 450px; margin: 20px auto; font-family: 'Courier New', Courier, monospace; color: #000000; box-shadow: 0 4px 8px rgba(0,0,0,0.1); border-radius: 4px; }
     .receipt-header { text-align: center; font-weight: bold; border-bottom: 1px dashed #333333; padding-bottom: 10px; margin-bottom: 10px; }
     
-    /* Floating WhatsApp Button */
+    /* Official WhatsApp Icon Button - 'Mhudumu' Styling */
     .floating-wa { position: fixed; bottom: 25px; right: 25px; background-color: #25D366; color: white !important; padding: 14px 22px; border-radius: 50px; font-weight: bold; font-size: 16px; box-shadow: 0px 5px 15px rgba(0,0,0,0.3); z-index: 999999; text-decoration: none !important; display: flex; align-items: center; gap: 8px; }
+    .floating-wa:hover { background-color: #128C7E; transform: scale(1.05); transition: 0.3s; }
     </style>
 """, unsafe_allow_html=True)
 
-# ----------------- LIVE WHATSAPP CLIENT SUPPORT (0615288736) -----------------
+# ----------------- LIVE WHATSAPP WAITER SUPPORT (Mhudumu) -----------------
 SUPPORT_PHONE = "255615288736" 
-encoded_support_msg = urllib.parse.quote("Habari 4G Fastfood, nahitaji msaada au maelezo zaidi kuhusu huduma zenu.")
+encoded_support_msg = urllib.parse.quote("Habari, nahitaji msaada kutoka kwa Mhudumu wa 4G Fastfood.")
 support_url = f"https://api.whatsapp.com/send?phone={SUPPORT_PHONE}&text={encoded_support_msg}"
-st.markdown(f'<a href="{support_url}" target="_blank" class="floating-wa">💬 Huduma kwa Mteja (WhatsApp)</a>', unsafe_allow_html=True)
+
+# Muundo mpya wenye Icon rasmi ya WhatsApp na neno "Mhudumu"
+st.markdown(f'''
+    <a href="{support_url}" target="_blank" class="floating-wa">
+        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="currentColor" viewBox="0 0 16 16" style="margin-right:2px;">
+            <path d="M13.601 2.326A7.85 7.85 0 0 0 8 0a7.86 7.86 0 0 0-6.691 11.834L0 16l4.24-.1.353.21A7.89 7.89 0 0 0 8 16c4.329 0 7.86-3.523 7.86-7.853 0-2.103-.819-4.08-2.322-5.58H13.6zM8 14.423c-1.954 0-3.87-.52-5.544-1.503l-.398-.235-2.5 1.135.58-2.33-.266-.424A6.53 6.53 0 0 1 1.41 8c0-3.605 2.943-6.533 6.54-6.533 1.748 0 3.393.68 4.631 1.916 1.237 1.237 1.919 2.885 1.919 4.617 0 3.605-2.943 6.533-6.54 6.533m3.608-4.991c-.197-.099-1.17-.578-1.353-.646-.182-.065-.315-.099-.445.099-.133.197-.513.646-.627.775-.114.133-.232.148-.43.05-.197-.1-.836-.308-1.592-.985-.59-.525-.985-1.175-1.103-1.372-.114-.198-.011-.304.088-.403.087-.088.197-.232.296-.346.1-.114.133-.198.198-.33.065-.134.034-.248-.015-.347-.05-.099-.445-1.076-.612-1.47-.16-.389-.323-.335-.445-.34-.114-.007-.247-.007-.38-.007a.73.73 0 0 0-.529.247c-.182.198-.691.677-.691 1.654s.71 1.916.81 2.049c.098.133 1.394 2.132 3.383 2.992.47.205.84.326 1.129.418.475.152.904.129 1.246.08.38-.058 1.171-.48 1.338-.943.164-.464.164-.86.114-.943-.049-.084-.182-.133-.38-.232"/>
+        </svg>
+        Mhudumu
+    </a>
+''', unsafe_allow_html=True)
 
 # ----------------- GOOGLE APPS SCRIPT CONNECTIVITY VIA API -----------------
 SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzo5PUYDG9tOHJ_r8IzlUEtJGEQ5kojJAfI6sKm__td6RwbdOEiQaqNEqVZbNJxXeNksg/exec"
@@ -67,12 +77,12 @@ def add_row_to_sheet(worksheet_name, row_list):
         st.error(f"Imeshindwa kuunganisha na kanzidata: {e}")
         return False
 
-# Kupakia data zote kutoka Google Sheets
+# Kupatia data zote kutoka Google Sheets Live
 orders_df = load_data_via_api("Orders", ORDER_COLS)
 expenses_df = load_data_via_api("Expenses", EXPENSE_COLS)
 attendance_df = load_data_via_api("Attendance", ATTENDANCE_COLS)
 
-# Menu Management (Inahifadhiwa kwenye Session ili Admin aweze kuongeza/kufuta vitu mbele ya wateja)
+# Menu Management (Session State)
 if 'dynamic_menu' not in st.session_state:
     st.session_state.dynamic_menu = pd.DataFrame({
         'Item_ID': range(1, 16),
@@ -89,7 +99,6 @@ if 'dynamic_menu' not in st.session_state:
         'Price': [2000, 2500, 2000, 2500, 5000, 2000, 2000, 3000, 1000, 500, 1000, 700, 700, 1500, 500]
     })
 
-# Session ya kushikilia risiti ya mwisho baada ya oda kufanyika
 if 'last_receipt' not in st.session_state:
     st.session_state.last_receipt = None
 
@@ -153,7 +162,6 @@ with tab1:
                 with st.spinner("Inatuma oda yako jikoni..."):
                     if add_row_to_sheet("Orders", row_data):
                         st.balloons()
-                        # Hifadhi taarifa za risiti
                         st.session_state.last_receipt = {
                             "id": order_id, "name": c_name, "phone": c_phone,
                             "items": cart, "delivery": delivery_fee, "total": grand_total, "time": timestamp
@@ -162,7 +170,6 @@ with tab1:
                         time.sleep(1)
                         st.rerun()
 
-        # SEHEMU YA KUONYESHA RISITI (PAYSLIP)
         if st.session_state.last_receipt:
             rc = st.session_state.last_receipt
             st.markdown("---")
@@ -188,7 +195,7 @@ with tab1:
                 st.rerun()
 
 # ==============================================================================
-# TAB 2: STAFF KITCHEN MONITOR
+# TAB 2: STAFF KITCHEN MONITOR (APPROVED ORDERS LIVE FIXED)
 # ==============================================================================
 with tab2:
     st.markdown("<div class='section-header'>Oda Zinazosubiri Jikoni (Pending Verification)</div>", unsafe_allow_html=True)
@@ -204,17 +211,42 @@ with tab2:
             handler = st.text_input("Jina la Mhudumu anayeidhinisha (Your Name):")
             
             if st.button("Change Status to APPROVED", type="primary"):
-                if not handler: st.warning("Tafadhali weka jina lako kabla ya kuidhinisha!")
+                if not handler: 
+                    st.warning("Tafadhali weka jina lako kabla ya kuidhinisha!")
                 else:
                     matched_row = pending_orders[pending_orders['Order_ID'].astype(str) == selected_order].iloc[0]
-                    update_row = [selected_order, matched_row['Customer_Name'], matched_row['Phone_Number'], matched_row['Items_Ordered'], matched_row['Total_Amount'], matched_row['Delivery_Required'], matched_row['Delivery_Address'], 'Approved', datetime.now().strftime("%Y-%m-%d %H:%M:%S"), handler]
-                    if add_row_to_sheet("Orders", update_row):
-                        st.success(f"Oda #{selected_order} imethibitishwa!"); time.sleep(1.5); st.rerun()
+                    
+                    # SULUHISHO: Order_ID inalazimishwa kuwa herufi (String) safi bila nafasi ili kulandana na Sheet ya Google
+                    update_row = [
+                        str(selected_order).strip(), 
+                        str(matched_row['Customer_Name']), 
+                        str(matched_row['Phone_Number']), 
+                        str(matched_row['Items_Ordered']), 
+                        str(matched_row['Total_Amount']), 
+                        str(matched_row['Delivery_Required']), 
+                        str(matched_row['Delivery_Address']), 
+                        'Approved', 
+                        datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 
+                        str(handler)
+                    ]
+                    with st.spinner("Inabadilisha na kusave hali ya oda Google Sheet..."):
+                        if add_row_to_sheet("Orders", update_row):
+                            st.success(f"Oda #{selected_order} imethibitishwa na kurekodiwa vyema!")
+                            time.sleep(1)
+                            st.rerun()
     else:
         st.info("Hakuna kumbukumbu za oda kwenye mfumo.")
 
+    st.markdown("<div class='section-header'>Oda Zilizothibitishwa Leo (Approved Orders Log)</div>", unsafe_allow_html=True)
+    if not orders_df.empty and 'Status' in orders_df.columns:
+        approved_orders = orders_df[orders_df['Status'].astype(str).str.strip().str.lower() == 'approved']
+        if not approved_orders.empty:
+            st.dataframe(approved_orders[ORDER_COLS], use_container_width=True)
+        else:
+            st.info("Bado hakuna oda zilizoidhinishwa kwa sasa.")
+
 # ==============================================================================
-# TAB 3: FINANCIAL ADMIN & ADMIN MENU MANAGER (ADD / REMOVE BIDHAA)
+# TAB 3: FINANCIAL ADMIN & ADMIN MENU MANAGER
 # ==============================================================================
 with tab3:
     st.markdown("<div class='section-header'>🔧 Usimamizi wa Menyu (Admin Access Control)</div>", unsafe_allow_html=True)
@@ -262,7 +294,7 @@ with tab3:
         st.metric("📊 FAIDA KUU (Net Profit)", f"TZS {int(inc - exp):,}")
 
 # ==============================================================================
-# TAB 4: MAHUDHURIO YANAYOREKODI DIRECT GOOGLE SHEETS
+# TAB 4: MAHUDHURIO (ATTENDANCE LOG)
 # ==============================================================================
 with tab4:
     st.markdown("<div class='section-header'>📋 Mahudhurio ya Wafanyakazi (Live Data Tracking)</div>", unsafe_allow_html=True)
@@ -276,21 +308,17 @@ with tab4:
         
         if st.button("Tuma Mahudhurio Google Sheet", type="primary"):
             if not staff_name:
-                st.error("Tafadhali andika jina lako kwanza ili mfumo utambue nani anajisajili!")
+                st.error("Tafadhali andika jina lako kwanza!")
             else:
                 now_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                # Hubeba mpangilio wa nguzo: Staff_Name | Role | Action | Timestamp
                 attendance_row = [staff_name, staff_role, attendance_action, now_time]
-                
-                with st.spinner("Inatuma mahudhurio yako kwenye Google Sheets ya biashara..."):
+                with st.spinner("Inatuma mahudhurio..."):
                     if add_row_to_sheet("Attendance", attendance_row):
-                        st.success(f"✅ Safi sana {staff_name}! Taarifa yako ya ({attendance_action}) imerekodiwa kikamilifu.")
-                        time.sleep(1.5)
-                        st.rerun()
+                        st.success(f"✅ Mahudhurio ya {staff_name} yamehifadhiwa."); time.sleep(1); st.rerun()
                         
     with col_a2:
-        st.subheader("Ripoti ya Mahudhurio ya Leo (Live Sheet View)")
+        st.subheader("Ripoti ya Mahudhurio ya Leo")
         if not attendance_df.empty:
             st.dataframe(attendance_df, use_container_width=True)
         else:
-            st.info("Bado hakuna mfanyakazi aliyejisajili leo kwenye Google Sheet.")
+            st.info("Bado hakuna mfanyakazi aliyejisajili leo.")
