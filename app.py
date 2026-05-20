@@ -4,7 +4,6 @@ import urllib.parse
 import requests
 import time
 from datetime import datetime
-from streamlit_gsheets import GSheetsConnection
 
 # Page Configuration
 st.set_page_config(page_title="4G_fastfood System", page_icon="🍔", layout="wide")
@@ -20,78 +19,62 @@ st.markdown("""
     .menu-card strong { font-size: 18px; color: #1B5E20; }
     .price-tag { color: #E65100; font-weight: bold; font-size: 16px; float: right; }
     .floating-wa { position: fixed; bottom: 25px; right: 25px; background-color: #25D366; color: white !important; padding: 14px 22px; border-radius: 50px; font-weight: bold; font-size: 16px; box-shadow: 0px 5px 15px rgba(0,0,0,0.3); z-index: 999999; text-decoration: none !important; }
-    .field-label { font-size: 16px; font-weight: bold; color: #1B5E20; margin-top: 10px; margin-bottom: -5px; display: block; }
     </style>
 """, unsafe_allow_html=True)
 
-# ----------------- FLOATING WHATSAPP CUSTOMER SERVICE -----------------
-SUPPORT_PHONE = "255615288736" 
-encoded_support_msg = urllib.parse.quote("Hello 4G_fastfood, nahitaji msaada/huduma tafadhali.")
-support_url = f"https://api.whatsapp.com/send?phone={SUPPORT_PHONE}&text={encoded_support_msg}"
-st.markdown(f'<a href="{support_url}" target="_blank" class="floating-wa">💬 Chat na 4G_fastfood</a>', unsafe_allow_html=True)
-
-# ----------------- DATABASE INITIALIZATION & LIVE SYNC -----------------
-conn = st.connection("gsheets", type=GSheetsConnection)
+# ----------------- 🚨 LIVE LINK YA GOOGLE APPS SCRIPT ULIYOWEKA -----------------
+SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzo5PUYDG9tOHJ_r8IzlUEtJGEQ5kojJAfI6sKm__td6RwbdOEiQaqNEqVZbNJxXeNksg/exec"
 
 ORDER_COLS = ['Order_ID', 'Customer_Name', 'Phone_Number', 'Items_Ordered', 'Total_Amount', 'Delivery_Required', 'Delivery_Address', 'Status', 'Timestamp', 'Assigned_Staff']
 EXPENSE_COLS = ['Expense_ID', 'Date', 'Category', 'Vendor', 'Description', 'Amount']
 
-def load_data(worksheet_name, default_cols):
+# Kazi ya kusoma data kutoka Google Sheets kupitia API Link yako
+def load_data_via_api(worksheet_name, default_cols):
     try:
-        # Soma data moja kwa moja kutoka Google Sheets
-        df = conn.read(worksheet=worksheet_name, ttl=0)
-        if df is None or df.empty:
-            return pd.DataFrame(columns=default_cols)
-        
-        # USAFISHAJI SALAMA WA NGUZO: Unabadilisha nafasi kuwa '_' bila kuharibu herufi kubwa/ndogo
-        df.columns = [str(c).strip().replace(" ", "_") for c in df.columns]
-        
-        # Kurekebisha makosa ya uandishi wa kawaida (mfano 'Order_Id' au 'order_id' kwenda 'Order_ID')
-        df.columns = [c.replace("Order_Id", "Order_ID").replace("Order_id", "Order_ID").replace("order_id", "Order_ID") for c in df.columns]
-        df.columns = [c.replace("Expense_Id", "Expense_ID").replace("Expense_id", "Expense_ID").replace("expense_id", "Expense_ID") for c in df.columns]
-        
-        df.dropna(how='all', inplace=True)
-        
-        # Uhakiki wa uwepo wa nguzo zote zilizoelezwa kwenye ORDER_COLS au EXPENSE_COLS
-        normalized_df = pd.DataFrame()
-        for col in default_cols:
-            if col in df.columns:
-                normalized_df[col] = df[col]
-            else:
-                normalized_df[col] = "" # Kama nguzo haipo, inatengeneza nguzo tupu kuzuia crash
-                
-        if not normalized_df.empty:
-            if worksheet_name == "Orders" and 'Order_ID' in normalized_df.columns:
-                normalized_df['Order_ID'] = normalized_df['Order_ID'].astype(str).str.strip()
-                normalized_df = normalized_df[normalized_df['Order_ID'] != ""]
-                normalized_df.drop_duplicates(subset=['Order_ID'], keep='last', inplace=True)
-            elif worksheet_name == "Expenses" and 'Expense_ID' in normalized_df.columns:
-                normalized_df['Expense_ID'] = normalized_df['Expense_ID'].astype(str).str.strip()
-                normalized_df = normalized_df[normalized_df['Expense_ID'] != ""]
-                normalized_df.drop_duplicates(subset=['Expense_ID'], keep='last', inplace=True)
-                
-        return normalized_df
-    except Exception as e:
-        # Ikitokea kosa lolote la kiufundi, inaunda jedwali tupu lenye nguzo sahihi ili kuzuia error mbele ya skrini
+        response = requests.get(f"{SCRIPT_URL}?sheetName={worksheet_name}", timeout=15)
+        if response.status_code == 200:
+            data_json = response.json()
+            # Kama hakuna data au kuna kosa, inarudisha jedwali tupu lenye vichwa vya habari
+            if not data_json or "status" in str(data_json):
+                return pd.DataFrame(columns=default_cols)
+            
+            df = pd.DataFrame(data_json)
+            
+            # Usafirishaji wa majina ya nguzo kuondoa mapengo au herufi zisizolingana
+            clean_cols = {}
+            for col in df.columns:
+                clean_name = str(col).strip().replace(" ", "_")
+                if clean_name.lower() == "order_id": clean_name = "Order_ID"
+                if clean_name.lower() == "expense_id": clean_name = "Expense_ID"
+                clean_cols[col] = clean_name
+            df.rename(columns=clean_cols, inplace=True)
+            
+            # Kuhakikisha nguzo zote zipo hata kama hazina data
+            for col in default_cols:
+                if col not in df.columns:
+                    df[col] = ""
+                    
+            return df[default_cols]
+        return pd.DataFrame(columns=default_cols)
+    except Exception:
         return pd.DataFrame(columns=default_cols)
 
-# Push data to Google Sheet using Web Script API
+# Kazi ya kutuma au ku-update data kwenye Google Sheets kupitia API Link yako
 def add_row_to_sheet(worksheet_name, row_list):
     try:
-        script_url = "https://script.google.com/macros/s/AKfycbzo5PUYDG9tOHJ_r8IzlUEtJGEQ5kojJAfI6sKm__td6RwbdOEiQaqNEqVZbNJxXeNksg/exec"
         payload = {
             "sheetName": worksheet_name,
             "rowData": [str(x) for x in row_list]
         }
-        response = requests.post(script_url, json=payload, timeout=10)
+        response = requests.post(SCRIPT_URL, json=payload, timeout=15)
         return response.status_code == 200
     except Exception as e:
-        st.error(f"Failed to reach database pipeline: {e}")
+        st.error(f"Imeshindwa kuunganisha na kanzidata ya Google: {e}")
         return False
 
-# Load live tables
-orders_df = load_data("Orders", ORDER_COLS)
-expenses_df = load_data("Expenses", EXPENSE_COLS)
+# Kupakia data za sasa hivi moja kwa moja (Live Sync)
+orders_df = load_data_via_api("Orders", ORDER_COLS)
+expenses_df = load_data_via_api("Expenses", EXPENSE_COLS)
 
 # Menu configuration
 if 'dynamic_menu' not in st.session_state:
@@ -149,9 +132,7 @@ with tab1:
         c_name = st.text_input("Jina Lako Kamili (Full Name):", placeholder="Mfn: John Doe")
         c_phone = st.text_input("Namba yako ya WhatsApp (Phone Number):", placeholder="Mfn: 255615288736")
         
-        st.markdown("<br>", unsafe_allow_html=True)
         delivery = st.checkbox("Je unahitaji usafirishaji nyumbani (Delivery)?")
-        
         address = "N/A"
         delivery_fee = 1500 if delivery else 0
         if delivery:
@@ -184,16 +165,13 @@ with tab1:
                 items_str = ", ".join([f"{k} (x{v['qty']})" for k, v in cart.items()])
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 
-                row_data = [
-                    order_id, c_name, c_phone, items_str, grand_total, 
-                    str(delivery), address, 'Pending', timestamp, 'Unassigned'
-                ]
+                row_data = [order_id, c_name, c_phone, items_str, grand_total, str(delivery), address, 'Pending', timestamp, 'Unassigned']
                 
                 with st.spinner("Inatuma oda yako jikoni..."):
                     if add_row_to_sheet("Orders", row_data):
                         st.balloons()
-                        st.success(f"🎉 Imefanikiwa! Oda yako imetumwa kwenda Kitchen. ID: #{order_id}")
-                        time.sleep(1.5) # Inalinda Google Script isingatane
+                        st.success(f"🎉 Imefanikiwa! Mfumo umehifadhi Oda yako. ID: #{order_id}")
+                        time.sleep(1.5)
                         st.rerun()
 
 # ==============================================================================
@@ -230,8 +208,8 @@ with tab2:
                     ]
                     with st.spinner("Inabadilisha hali ya oda kuwa APPROVED..."):
                         if add_row_to_sheet("Orders", update_row):
-                            st.success(f"Oda #{selected_order} imethibitishwa vyema!")
-                            time.sleep(1.5) # Muhimu kuzuia duplication
+                            st.success(f"Oda #{selected_order} imethibitishwa na kuhifadhiwa vyema!")
+                            time.sleep(1.5)
                             st.rerun()
     else:
         st.info("Safi sana! Hakuna oda zinazosubiri kupikwa kwa sasa.")
@@ -242,76 +220,23 @@ with tab2:
         approved_orders = orders_df[orders_df['Status_Clean'] == 'approved']
         if not approved_orders.empty:
             st.dataframe(approved_orders[['Order_ID', 'Customer_Name', 'Items_Ordered', 'Total_Amount', 'Assigned_Staff', 'Timestamp']], use_container_width=True)
-        else:
-            st.write("Hakuna oda zilizothibitishwa bado.")
 
 # ==============================================================================
 # TAB 3: FINANCIAL ADMIN & LIVE PERFORMANCE PROFILE
 # ==============================================================================
 with tab3:
-    st.markdown("<div class='section-header'>Usimamizi wa Menyu (Add New Foods & Prices)</div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-header'>Usimamizi wa Menyu & Mizania ya Fedha</div>", unsafe_allow_html=True)
     col_m1, col_m2 = st.columns(2)
-    
     with col_m1:
-        st.subheader("Ongeza Chakula Kipya Kwenye Menyu")
-        new_food_name = st.text_input("Jina la Chakula (e.g., Wali-Kuku Special):")
-        new_food_cat = st.selectbox("Kundi / Category:", ["Chakula", "Vitafunio", "Vinywaji"])
-        new_food_price = st.number_input("Bei yake (TZS):", min_value=0, step=100)
-        
-        if st.button("Hifadhi Chakula Kipya kwenye Mfumo"):
-            if not new_food_name:
-                st.error("Tafadhali andika jina la chakula!")
-            else:
-                next_id = len(st.session_state.dynamic_menu) + 1
-                new_item = pd.DataFrame([{
-                    'Item_ID': next_id, 'Name': new_food_name, 'Category': new_food_cat, 'Price': new_food_price
-                }])
-                st.session_state.dynamic_menu = pd.concat([st.session_state.dynamic_menu, new_item], ignore_index=True)
-                st.success(f"🤩 Safi! {new_food_name} kimeongezwa kwenye menyu ya wateja!")
-                st.rerun()
-                
-    with col_m2:
         st.subheader("Orodha ya Menyu Iliyopo Sasa")
         st.dataframe(st.session_state.dynamic_menu, use_container_width=True)
-
-    st.markdown("<div class='section-header'>Mizania ya Fedha & Matumizi</div>", unsafe_allow_html=True)
-    col_f1, col_f2 = st.columns(2)
-    
-    with col_f1:
-        st.subheader("Weka Matumizi Mapya (Log Expense)")
-        ex_cat = st.selectbox("Aina ya Matumizi:", ["COGS-Food", "Labor", "Utilities", "Other"])
-        ex_vendor = st.text_input("Umejinunulia wapi / Vendor:")
-        ex_desc = st.text_input("Maelezo ya Bidhaa / Description:")
-        ex_amount = st.number_input("Kiasi kilicholipwa (TZS):", min_value=0)
-        
-        if st.button("Hifadhi Matumizi Mapya"):
-            try:
-                if not expenses_df.empty and 'Expense_ID' in expenses_df.columns:
-                    valid_ex_ids = pd.to_numeric(expenses_df['Expense_ID'], errors='coerce').dropna()
-                    ex_id = int(valid_ex_ids.max() + 1) if not valid_ex_ids.empty else 5001
-                else:
-                    ex_id = 5001
-            except Exception:
-                ex_id = 5001
-                
-            date_str = datetime.now().strftime("%Y-%m-%d")
-            expense_row = [ex_id, date_str, ex_cat, ex_vendor, ex_desc, ex_amount]
-            
-            with st.spinner("Inahifadhi matumizi..."):
-                if add_row_to_sheet("Expenses", expense_row):
-                    st.success("Matumizi yamehifadhiwa kwenye Google Sheet!")
-                    time.sleep(1.5)
-                    st.rerun()
-            
-    with col_f2:
-        st.subheader("Muhtasari wa Faida na Hasara")
+    with col_m2:
+        st.subheader("Muhtasari wa Faida na Hasara (Live Analysis)")
         total_approved_inc = 0
         total_pending_inc = 0
-        
         if not orders_df.empty and 'Status' in orders_df.columns and 'Total_Amount' in orders_df.columns:
             orders_df['Status_Clean'] = orders_df['Status'].astype(str).str.strip().str.lower()
             orders_df['Numeric_Amount'] = pd.to_numeric(orders_df['Total_Amount'], errors='coerce').fillna(0)
-            
             total_approved_inc = orders_df[orders_df['Status_Clean'] == 'approved']['Numeric_Amount'].sum()
             total_pending_inc = orders_df[orders_df['Status_Clean'] == 'pending']['Numeric_Amount'].sum()
         
@@ -320,87 +245,17 @@ with tab3:
             expenses_df['Numeric_Expense'] = pd.to_numeric(expenses_df['Amount'], errors='coerce').fillna(0)
             total_exp = expenses_df['Numeric_Expense'].sum()
             
-        net_prof = total_approved_inc - total_exp
-        
-        st.metric(label="💰 Jumla ya Mapato Halisi (Approved Cash)", value=f"TZS {int(total_approved_inc):,}")
-        st.metric(label="⏳ Thamani ya Oda Zinazosubiri (Pending Orders Value)", value=f"TZS {int(total_pending_inc):,}")
+        st.metric(label="💰 Mapato Halisi (Approved Cash)", value=f"TZS {int(total_approved_inc):,}")
+        st.metric(label="⏳ Thamani ya Oda Zinazosubiri", value=f"TZS {int(total_pending_inc):,}")
         st.metric(label="📉 Jumla ya Matumizi (Total Expenses)", value=f"TZS {int(total_exp):,}")
-        
-        if net_prof >= 0:
-            st.metric(label="📊 FAIDA KUU (Net Profit)", value=f"TZS {int(net_prof):,}", delta="Biashara Inazalisha Vizuri! ✅")
-        else:
-            st.metric(label="📊 HASARA (Net Loss)", value=f"TZS {int(abs(net_prof)):,}", delta="- Hasara Katika Kipindi Hiki")
-
-    # ==============================================================================
-    # DYNAMIC VISUAL CHART REPRESTENTATION (FINANCIAL PROFILE TREND)
-    # ==============================================================================
-    st.markdown("<div class='section-header'>📈 Mwenendo wa Biashara (Financial Trend Profile)</div>", unsafe_allow_html=True)
-    
-    try:
-        timeline_frames = []
-        
-        if not orders_df.empty and 'Numeric_Amount' in orders_df.columns:
-            app_only = orders_df[orders_df['Status_Clean'] == 'approved'].copy()
-            if not app_only.empty and 'Timestamp' in app_only.columns:
-                app_only['Clean_Date'] = pd.to_datetime(app_only['Timestamp'], errors='coerce').dt.strftime('%Y-%m-%d')
-                inc_grouped = app_only.groupby('Clean_Date')['Numeric_Amount'].sum().reset_index()
-                inc_grouped.columns = ['Date', 'Income']
-                timeline_frames.append(inc_grouped)
-                
-        if not expenses_df.empty and 'Numeric_Expense' in expenses_df.columns:
-            exp_copy = expenses_df.copy()
-            if not exp_copy.empty and 'Date' in exp_copy.columns:
-                exp_copy['Clean_Date'] = pd.to_datetime(exp_copy['Date'], errors='coerce').dt.strftime('%Y-%m-%d')
-                exp_grouped = exp_copy.groupby('Clean_Date')['Numeric_Expense'].sum().reset_index()
-                exp_grouped.columns = ['Date', 'Expenses']
-                timeline_frames.append(exp_grouped)
-                
-        if timeline_frames:
-            merged_timeline = timeline_frames[0]
-            for next_frame in timeline_frames[1:]:
-                merged_timeline = pd.merge(merged_timeline, next_frame, on='Date', how='outer')
-                
-            merged_timeline.fillna(0, inplace=True)
-            merged_timeline = merged_timeline.sort_values(by='Date')
-            
-            merged_timeline['Cumulative_Income'] = merged_timeline['Income'].cumsum()
-            merged_timeline['Cumulative_Expenses'] = merged_timeline['Expenses'].cumsum()
-            merged_timeline['Net_Profit_Trend'] = merged_timeline['Cumulative_Income'] - merged_timeline['Cumulative_Expenses']
-            
-            chart_output = merged_timeline[['Date', 'Cumulative_Income', 'Cumulative_Expenses', 'Net_Profit_Trend']].copy()
-            chart_output.set_index('Date', inplace=True)
-            
-            st.write("Grafu ya Mwenendo wa Mapato, Matumizi na Faida kwa kila Tarehe:")
-            st.area_chart(chart_output, use_container_width=True)
-        else:
-            st.info("Ingiza data za Oda na Matumizi ili kuona grafu ya mwenendo hapa.")
-    except Exception:
-        st.info("Grafu itatokea hapa pindi data za miamala zitakapokamilika kikamilifu.")
+        st.metric(label="📊 FAIDA KUU (Net Profit)", value=f"TZS {int(total_approved_inc - total_exp):,}")
 
 # ==============================================================================
 # TAB 4: STAFF ATTENDANCE TRACKER
 # ==============================================================================
 with tab4:
     st.markdown("<div class='section-header'>📋 Mahudhurio ya Wafanyakazi (Staff Attendance)</div>", unsafe_allow_html=True)
-    col_a1, col_a2 = st.columns(2)
-    
-    with col_a1:
-        st.subheader("Sajili Mahudhurio Yako")
-        staff_member = st.selectbox("Chagua Jina Lako:", ["Mhudumu 1", "Mpishi Mkuu", "Driver Delivery", "Admin Partner"])
-        attendance_action = st.radio("Unachagua kufanya nini?", ["Clock In (Kuingia Kazini)", "Clock Out (Kutoka Kazini)"])
-        
-        if st.button("Hifadhi Mahudhurio"):
-            now_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            log_entry = pd.DataFrame([{
-                'Staff_Name': staff_member, 'Action': attendance_action, 'Timestamp': now_time
-            }])
-            st.session_state.attendance_log = pd.concat([st.session_state.attendance_log, log_entry], ignore_index=True)
-            st.success(f"✅ Umefanikiwa kusajili mahudhurio ya {staff_member}!")
-            st.rerun()
-            
-    with col_a2:
-        st.subheader("Ripoti ya Leo ya Mahudhurio")
-        if not st.session_state.attendance_log.empty:
-            st.dataframe(st.session_state.attendance_log, use_container_width=True)
-        else:
-            st.info("Hakuna mfanyakazi aliyeweka mahudhurio bado kwa siku ya leo.")
+    staff_member = st.selectbox("Chagua Jina Lako:", ["Mhudumu 1", "Mpishi Mkuu", "Driver Delivery", "Admin Partner"])
+    attendance_action = st.radio("Unachagua kufanya nini?", ["Clock In (Kuingia)", "Clock Out (Kutoka)"])
+    if st.button("Hifadhi Mahudhurio"):
+        st.success(f"✅ Umefanikiwa kusajili mahudhurio ya {staff_member}!")
