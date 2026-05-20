@@ -38,20 +38,27 @@ EXPENSE_COLS = ['Expense_ID', 'Date', 'Category', 'Vendor', 'Description', 'Amou
 
 def load_data(worksheet_name, default_cols):
     try:
+        # Soma data moja kwa moja kutoka Google Sheets
         df = conn.read(worksheet=worksheet_name, ttl=0)
         if df is None or df.empty:
             return pd.DataFrame(columns=default_cols)
         
-        # Data normalization: kusafisha majina ya nguzo
-        df.columns = [str(c).strip().replace(" ", "_").title().replace("Order_Id", "Order_ID").replace("Expense_Id", "Expense_ID") for c in df.columns]
+        # USAFISHAJI SALAMA WA NGUZO: Unabadilisha nafasi kuwa '_' bila kuharibu herufi kubwa/ndogo
+        df.columns = [str(c).strip().replace(" ", "_") for c in df.columns]
+        
+        # Kurekebisha makosa ya uandishi wa kawaida (mfano 'Order_Id' au 'order_id' kwenda 'Order_ID')
+        df.columns = [c.replace("Order_Id", "Order_ID").replace("Order_id", "Order_ID").replace("order_id", "Order_ID") for c in df.columns]
+        df.columns = [c.replace("Expense_Id", "Expense_ID").replace("Expense_id", "Expense_ID").replace("expense_id", "Expense_ID") for c in df.columns]
+        
         df.dropna(how='all', inplace=True)
         
+        # Uhakiki wa uwepo wa nguzo zote zilizoelezwa kwenye ORDER_COLS au EXPENSE_COLS
         normalized_df = pd.DataFrame()
         for col in default_cols:
             if col in df.columns:
                 normalized_df[col] = df[col]
             else:
-                normalized_df[col] = ""
+                normalized_df[col] = "" # Kama nguzo haipo, inatengeneza nguzo tupu kuzuia crash
                 
         if not normalized_df.empty:
             if worksheet_name == "Orders" and 'Order_ID' in normalized_df.columns:
@@ -64,7 +71,8 @@ def load_data(worksheet_name, default_cols):
                 normalized_df.drop_duplicates(subset=['Expense_ID'], keep='last', inplace=True)
                 
         return normalized_df
-    except Exception:
+    except Exception as e:
+        # Ikitokea kosa lolote la kiufundi, inaunda jedwali tupu lenye nguzo sahihi ili kuzuia error mbele ya skrini
         return pd.DataFrame(columns=default_cols)
 
 # Push data to Google Sheet using Web Script API
