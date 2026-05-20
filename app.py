@@ -70,7 +70,7 @@ def load_data(worksheet_name, default_cols):
 # Push data to Google Sheet using Web Script API
 def add_row_to_sheet(worksheet_name, row_list):
     try:
-        script_url = "https://script.google.com/macros/s/AKfycbzcO5vN738web5dkDD7OYRWMlVgeZ8p0Jnmw0KQ8e6Ue3FalwkRfusfVHphzZ3BzBOMaw/exec"
+        script_url = "https://script.google.com/macros/s/AKfycbzo5PUYDG9tOHJ_r8IzlUEtJGEQ5kojJAfI6sKm__td6RwbdOEiQaqNEqVZbNJxXeNksg/exec"
         payload = {
             "sheetName": worksheet_name,
             "rowData": [str(x) for x in row_list]
